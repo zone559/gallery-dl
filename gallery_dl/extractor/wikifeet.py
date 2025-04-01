@@ -50,16 +50,47 @@ class WikifeetGalleryExtractor(GalleryExtractor):
             "S": "Soles",
             "B": "Barefoot",
         }
-        ufmt = "https://pics.wikifeet.com/" + self.celeb + "-Feet-{}.jpg"
-        return [
-            (ufmt.format(data["pid"]), {
-                "pid"   : data["pid"],
-                "width" : data["pw"],
-                "height": data["ph"],
-                "tags"  : [
-                    tagmap[tag]
-                    for tag in data["tags"] if tag in tagmap
-                ],
+
+        # Try to extract JSON data using multiple possible patterns
+        json_data = None
+        
+        # Pattern 1: ['gdata'] = [...];
+        json_str = text.extr(page, "['gdata'] = ", ";")
+        if json_str:
+            try:
+                json_data = util.json_loads(json_str)
+            except ValueError:
+                json_data = None
+        
+        # Pattern 2: "gallery":[...]
+        if not json_data:
+            json_str = text.extr(page, '"gallery":', ']') + ']'
+            if json_str and json_str != ']':
+                try:
+                    json_data = util.json_loads(json_str)
+                except ValueError:
+                    json_data = None
+        
+        # Fallback: Try to find any JSON array that looks like image data
+        if not json_data:
+            # This is a more general approach that might catch other formats
+            json_str = text.extr(page, '[{"pid":"', '}]') + '}]'
+            if json_str and json_str != '}]':
+                try:
+                    json_data = util.json_loads('[' + json_str)
+                except ValueError:
+                    json_data = None
+        
+        if not json_data:
+            return []
+
+        for data in json_data:
+            # Use numeric URL format: https://pics.wikifeet.com/8514553.jpg
+            image_url = "https://pics.wikifeet.com/{}.jpg".format(data["pid"])
+            
+            yield (image_url, {
+                "pid": data["pid"],
+                "width": data.get("pw", 0),  # Using .get() for safety
+                "height": data.get("ph", 0),
+                "tags": [tagmap[tag] for tag in data.get("tags", []) if tag in tagmap],
             })
-            for data in util.json_loads(text.extr(page, "['gdata'] = ", ";"))
-        ]
