@@ -141,7 +141,7 @@ class VscoUserExtractor(Dispatch, VscoExtractor):
             (VscoAvatarExtractor    , base + "avatar"),
             (VscoGalleryExtractor   , base + "gallery"),
             (VscoSpacesExtractor    , base + "spaces"),
-            (VscoCollectionExtractor, base + "collection"),
+            (VscoRepostExtractor, base + "repost"),
         ), ("gallery",))
 
 
@@ -160,17 +160,17 @@ class VscoGalleryExtractor(VscoExtractor):
         url = f"{self.root}/api/3.0/medias/profile"
         params = {
             "site_id"  : sid,
-            "limit"    : "14",
+            "limit"    : "30",
             "cursor"   : None,
         }
 
         return self._pagination(url, params, tkn, "media")
 
 
-class VscoCollectionExtractor(VscoExtractor):
-    """Extractor for images from a collection on vsco.co"""
-    subcategory = "collection"
-    directory_fmt = ("{category}", "{user}", "collection")
+class VscoRepostExtractor(VscoExtractor):
+    """Extractor for images from a repost on vsco.co"""
+    subcategory = "repost"
+    directory_fmt = ("{category}", "{user}", "repost")
     archive_fmt = "c_{user}_{id}"
     pattern = USER_PATTERN + r"/collection"
     example = "https://vsco.co/USER/collection/1"
@@ -335,3 +335,42 @@ class VscoVideoExtractor(VscoExtractor):
             "height"        : media["height"],
             "description"   : media["description"],
         },)
+
+
+class VscoJournalExtractor(VscoExtractor):
+    """Extractor for vsco.co journal pages"""
+    subcategory = "journal"
+    pattern = USER_PATTERN + r"/journal(?:/p/(\d+))?"
+    example = "https://vsco.co/jtrav/journal/p/1"
+
+    def images(self):
+        url = "{}/{}/journal/p/1".format(self.root, self.user)
+        page = self.request(url).text
+        
+        # Extract permalinks from journal page
+        permalinks = re.findall(r'"permalink":"([^"]+)"', page)
+        if not permalinks:
+            self.log.debug("No permalinks found on journal page")
+            return []
+            
+        # Extract image IDs from each permalink
+        image_ids = set()
+        for permalink in permalinks:
+            permalink_url = "{}/{}/journal/{}".format(self.root, self.user, permalink)
+            journal_page = self.request(permalink_url).text
+            ids = re.findall(r'alt="user-image-([a-f0-9]{24})"', journal_page)
+            image_ids.update(ids)
+            
+        # Create image objects with correct URLs
+        return [{
+            "_id"           : img_id,
+            "is_video"      : False,
+            "grid_name"     : "",
+            "upload_date"   : 0,
+            "responsive_url": "https://im.vsco.co/" + img_id,
+            "video_url"     : "",
+            "image_meta"    : None,
+            "width"         : 0,
+            "height"        : 0,
+            "description"   : "",
+        } for img_id in image_ids]
