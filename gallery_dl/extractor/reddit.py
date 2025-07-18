@@ -92,7 +92,18 @@ class RedditExtractor(Extractor):
                             yield Message.Url, url, submission
 
                     elif not submission["is_self"]:
-                        urls.append((url, submission))
+                        # Handle YouTube URLs
+                        if "youtube.com" in url or "youtu.be" in url:
+                            if videos:
+                                submission["_ytdl_extra"] = {
+                                    "title": submission["title"]
+                                }
+                                # Ensure required fields are present
+                                submission["extension"] = "mp4"
+                                text.nameext_from_url(url, submission)
+                                yield Message.Url, "ytdl:" + url, submission
+                        else:
+                            urls.append((url, submission))
 
                 elif parentdir:
                     yield Message.Directory, comments[0]
