@@ -73,7 +73,7 @@ class KemonoExtractor(Extractor):
             duplicates = ()
 
         # prevent files from being sent with gzip compression
-        headers = {"Accept-Encoding": "identity"}
+        headers = {"Accept-Encoding": "identity",}
 
         posts = self.posts()
         if max_posts:
@@ -102,15 +102,19 @@ class KemonoExtractor(Extractor):
                 post["username"] = creator["name"]
 
             if comments:
-                post["comments"] = cmts = self.api.creator_post_comments(
-                    service, creator_id, post["id"])
-                if not isinstance(cmts, list):
-                    self.log.debug("%s/%s: %s", creator_id, post["id"], cmts)
+                try:
+                    post["comments"] = self.api.creator_post_comments(
+                        service, creator_id, post["id"])
+                except exception.HttpError:
                     post["comments"] = ()
             if dms is not None:
                 if dms is True:
                     dms = self.api.creator_dms(
                         post["service"], post["user"])
+                    try:
+                        dms = dms["props"]["dms"]
+                    except Exception:
+                        dms = ()
                 post["dms"] = dms
             if announcements is not None:
                 if announcements is True:
@@ -241,15 +245,16 @@ class KemonoExtractor(Extractor):
     def _revisions_post(self, post):
         post["revision_id"] = 0
 
-        revs = self.api.creator_post_revisions(
-            post["service"], post["user"], post["id"])
-        if not revs:
+        try:
+            revs = self.api.creator_post_revisions(
+                post["service"], post["user"], post["id"])
+        except exception.HttpError:
             post["revision_hash"] = self._revision_hash(post)
             post["revision_index"] = 1
             post["revision_count"] = 1
             return (post,)
-
         revs.insert(0, post)
+
         for rev in revs:
             rev["revision_hash"] = self._revision_hash(rev)
 
@@ -320,14 +325,25 @@ class KemonoUserExtractor(KemonoExtractor):
     def posts(self):
         _, _, service, creator_id, query = self.groups
         params = text.parse_query(query)
+        tag = params.get("tag")
 
-        if self.config("endpoint") in ("posts+", "legacy+"):
-            endpoint = self.api.creator_posts_expand
+        endpoint = self.config("endpoint")
+        if endpoint == "legacy+":
+            endpoint = self._posts_legacy_plus
+        elif endpoint == "legacy" or tag:
+            endpoint = self.api.creator_posts_legacy
         else:
             endpoint = self.api.creator_posts
 
         return endpoint(service, creator_id,
-                        params.get("o"), params.get("q"), params.get("tag"))
+                        params.get("o"), params.get("q"), tag)
+
+    def _posts_legacy_plus(self, service, creator_id,
+                           offset=0, query=None, tags=None):
+        for post in self.api.creator_posts_legacy(
+                service, creator_id, offset, query, tags):
+            yield self.api.creator_post(
+                service, creator_id, post["id"])["post"]
 
 
 class KemonoPostsExtractor(KemonoExtractor):
@@ -578,16 +594,15 @@ class KemonoAPI():
 
     def creator_posts(self, service, creator_id,
                       offset=0, query=None, tags=None):
-        endpoint = f"/{service}/user/{creator_id}/posts"
-        params = {"o": offset, "tag": tags, "q": query}
+        endpoint = f"/{service}/user/{creator_id}"
+        params = {"q": query, "tag": tags, "o": offset}
         return self._pagination(endpoint, params, 50)
 
-    def creator_posts_expand(self, service, creator_id,
+    def creator_posts_legacy(self, service, creator_id,
                              offset=0, query=None, tags=None):
-        for post in self.creator_posts(
-                service, creator_id, offset, query, tags):
-            yield self.creator_post(
-                service, creator_id, post["id"])["post"]
+        endpoint = f"/{service}/user/{creator_id}/posts-legacy"
+        params = {"o": offset, "tag": tags, "q": query}
+        return self._pagination(endpoint, params, 50, "results")
 
     def creator_announcements(self, service, creator_id):
         endpoint = f"/{service}/user/{creator_id}/announcements"
@@ -607,11 +622,11 @@ class KemonoAPI():
 
     def creator_post_comments(self, service, creator_id, post_id):
         endpoint = f"/{service}/user/{creator_id}/post/{post_id}/comments"
-        return self._call(endpoint, fatal=False)
+        return self._call(endpoint)
 
     def creator_post_revisions(self, service, creator_id, post_id):
         endpoint = f"/{service}/user/{creator_id}/post/{post_id}/revisions"
-        return self._call(endpoint, fatal=False)
+        return self._call(endpoint)
 
     def creator_profile(self, service, creator_id):
         endpoint = f"/{service}/user/{creator_id}/profile"
@@ -642,18 +657,24 @@ class KemonoAPI():
         params = {"type": type}
         return self._call(endpoint, params)
 
-    def _call(self, endpoint, params=None, fatal=True):
-        return self.extractor.request_json(
-            self.root + endpoint, params=params, encoding="utf-8", fatal=fatal)
+    def _call(self, endpoint, params=None):
+        url = self.root + endpoint
+        headers = {"Accept": "text/css"}
+        response = self.extractor.request(url, params=params, headers=headers)
+        
+        try:
+            return response.json()  # Try JSON first
+        except ValueError:
+            return {"error": "Non-JSON response", "content": response.text}  # Fallback
 
-    def _pagination(self, endpoint, params, batch=50, key=None):
+    def _pagination(self, endpoint, params, batch=50, key=False):
         offset = text.parse_int(params.get("o"))
         params["o"] = offset - offset % batch
 
         while True:
             data = self._call(endpoint, params)
 
-            if key is not None:
+            if key:
                 data = data.get(key)
             if not data:
                 return
