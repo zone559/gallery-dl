@@ -38,7 +38,7 @@ class UrlgalleriesGalleryExtractor(GalleryExtractor):
         data["count"] = len(imgs)
 
         root = self.root
-        yield Message.Directory, data
+        yield Message.Directory, "", data
         for data["num"], img in enumerate(imgs, 1):
             page = self.request(root + img).text
             url = text.extr(page, "window.location.href = '", "'")
@@ -52,7 +52,7 @@ class UrlgalleriesGalleryExtractor(GalleryExtractor):
             "blog" : text.unescape(extr(' title="', '"')),
             "_rprt": extr(' title="', '"'),  # report button
             "title": text.unescape(extr(' title="', '"').strip()),
-            "date" : text.parse_datetime(
+            "date" : self.parse_datetime(
                 extr(" images in gallery | ", "<"), "%B %d, %Y"),
         }
 

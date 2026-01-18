@@ -12,7 +12,7 @@ from ..cache import cache, memcache
 import hashlib
 
 BASE_PATTERN = r"(?:https?://)?(?:www\.)?iwara\.tv"
-USER_PATTERN = rf"{BASE_PATTERN}/profile/([^/?#]+)"
+USER_PATTERN = BASE_PATTERN + r"/profile/([^/?#]+)"
 
 
 class IwaraExtractor(Extractor):
@@ -45,8 +45,9 @@ class IwaraExtractor(Extractor):
                                image["id"], exc.__class__.__name__, exc)
                 continue
 
+            group_info["type"] = "image"
             group_info["count"] = len(files)
-            yield Message.Directory, group_info
+            yield Message.Directory, "", group_info
             for num, file in enumerate(files, 1):
                 file_info = self.extract_media_info(file, None)
                 file_id = file_info["file_id"]
@@ -77,11 +78,11 @@ class IwaraExtractor(Extractor):
                                video["id"], exc.__class__.__name__, exc)
                 continue
 
-            yield Message.Directory, info
-            yield Message.Url, f"https:{download_url}", info
+            yield Message.Directory, "", info
+            yield Message.Url, "https:" + download_url, info
 
     def items_user(self, users, key=None):
-        base = f"{self.root}/profile/"
+        base = self.root + "/profile/"
         for user in users:
             if key is not None:
                 user = user[key]
@@ -89,7 +90,7 @@ class IwaraExtractor(Extractor):
                 continue
             user["type"] = "user"
             user["_extractor"] = IwaraUserExtractor
-            yield Message.Queue, f"{base}{username}", user
+            yield Message.Queue, base + username, user
 
     def items_by_type(self, type, results):
         if type == "image":
@@ -102,34 +103,37 @@ class IwaraExtractor(Extractor):
         raise exception.AbortExtraction(f"Unsupported result type '{type}'")
 
     def extract_media_info(self, item, key, include_file_info=True):
-        title = t.strip() if (t := item.get("title")) else ""
+        info = {
+            "id"      : item["id"],
+            "slug"    : item.get("slug"),
+            "rating"  : item.get("rating"),
+            "likes"   : item.get("numLikes"),
+            "views"   : item.get("numViews"),
+            "comments": item.get("numComments"),
+            "tags"    : [t["id"] for t in item.get("tags") or ()],
+            "title"   : t.strip() if (t := item.get("title")) else "",
+            "description": t.strip() if (t := item.get("body")) else "",
+        }
 
         if include_file_info:
             file_info = item if key is None else item.get(key) or {}
             filename, _, extension = file_info.get("name", "").rpartition(".")
 
-            return {
-                "id"       : item["id"],
-                "file_id"  : file_info.get("id"),
-                "title"    : title,
-                "filename" : filename,
-                "extension": extension,
-                "date"        : text.parse_datetime(
-                    file_info.get("createdAt"), "%Y-%m-%dT%H:%M:%S.%fZ"),
-                "date_updated": text.parse_datetime(
-                    file_info.get("updatedAt"), "%Y-%m-%dT%H:%M:%S.%fZ"),
-                "mime"     : file_info.get("mime"),
-                "size"     : file_info.get("size"),
-                "width"    : file_info.get("width"),
-                "height"   : file_info.get("height"),
-                "duration" : file_info.get("duration"),
-                "type"     : file_info.get("type"),
-            }
-        else:
-            return {
-                "id"   : item["id"],
-                "title": title,
-            }
+            info["file_id"] = file_info.get("id")
+            info["filename"] = filename
+            info["extension"] = extension
+            info["date"] = self.parse_datetime_iso(
+                file_info.get("createdAt"))
+            info["date_updated"] = self.parse_datetime_iso(
+                file_info.get("updatedAt"))
+            info["mime"] = file_info.get("mime")
+            info["size"] = file_info.get("size")
+            info["width"] = file_info.get("width")
+            info["height"] = file_info.get("height")
+            info["duration"] = file_info.get("duration")
+            info["type"] = file_info.get("type")
+
+        return info
 
     def extract_user_info(self, profile):
         user = profile.get("user") or {}
@@ -140,8 +144,7 @@ class IwaraExtractor(Extractor):
             "status" : user.get("status"),
             "role"   : user.get("role"),
             "premium": user.get("premium"),
-            "date"   : text.parse_datetime(
-                user.get("createdAt"), "%Y-%m-%dT%H:%M:%S.000Z"),
+            "date"   : self.parse_datetime_iso(user.get("createdAt")),
             "description": profile.get("body"),
         }
 
@@ -155,21 +158,21 @@ class IwaraExtractor(Extractor):
 
 class IwaraUserExtractor(Dispatch, IwaraExtractor):
     """Extractor for iwara.tv profile pages"""
-    pattern = rf"{USER_PATTERN}/?$"
+    pattern = USER_PATTERN + r"/?$"
     example = "https://www.iwara.tv/profile/USERNAME"
 
     def items(self):
         base = f"{self.root}/profile/{self.groups[0]}/"
         return self._dispatch_extractors((
-            (IwaraUserImagesExtractor   , f"{base}images"),
-            (IwaraUserVideosExtractor   , f"{base}videos"),
-            (IwaraUserPlaylistsExtractor, f"{base}playlists"),
+            (IwaraUserImagesExtractor   , base + "images"),
+            (IwaraUserVideosExtractor   , base + "videos"),
+            (IwaraUserPlaylistsExtractor, base + "playlists"),
         ), ("user-images", "user-videos"))
 
 
 class IwaraUserImagesExtractor(IwaraExtractor):
     subcategory = "user-images"
-    pattern = rf"{USER_PATTERN}/images(?:\?([^#]+))?"
+    pattern = USER_PATTERN + r"/images(?:\?([^#]+))?"
     example = "https://www.iwara.tv/profile/USERNAME/images"
 
     def items(self):
@@ -179,7 +182,7 @@ class IwaraUserImagesExtractor(IwaraExtractor):
 
 class IwaraUserVideosExtractor(IwaraExtractor):
     subcategory = "user-videos"
-    pattern = rf"{USER_PATTERN}/videos(?:\?([^#]+))?"
+    pattern = USER_PATTERN + r"/videos(?:\?([^#]+))?"
     example = "https://www.iwara.tv/profile/USERNAME/videos"
 
     def items(self):
@@ -189,22 +192,22 @@ class IwaraUserVideosExtractor(IwaraExtractor):
 
 class IwaraUserPlaylistsExtractor(IwaraExtractor):
     subcategory = "user-playlists"
-    pattern = rf"{USER_PATTERN}/playlists(?:\?([^#]+))?"
+    pattern = USER_PATTERN + r"/playlists(?:\?([^#]+))?"
     example = "https://www.iwara.tv/profile/USERNAME/playlists"
 
     def items(self):
-        base = f"{self.root}/playlist/"
+        base = self.root + "/playlist/"
 
         for playlist in self.api.playlists(self._user_params()[1]):
             playlist["type"] = "playlist"
             playlist["_extractor"] = IwaraPlaylistExtractor
-            url = f"{base}{playlist['id']}"
+            url = base + playlist["id"]
             yield Message.Queue, url, playlist
 
 
 class IwaraFollowingExtractor(IwaraExtractor):
     subcategory = "following"
-    pattern = rf"{USER_PATTERN}/following"
+    pattern = USER_PATTERN + r"/following"
     example = "https://www.iwara.tv/profile/USERNAME/following"
 
     def items(self):
@@ -214,7 +217,7 @@ class IwaraFollowingExtractor(IwaraExtractor):
 
 class IwaraFollowersExtractor(IwaraExtractor):
     subcategory = "followers"
-    pattern = rf"{USER_PATTERN}/followers"
+    pattern = USER_PATTERN + r"/followers"
     example = "https://www.iwara.tv/profile/USERNAME/followers"
 
     def items(self):
@@ -225,7 +228,7 @@ class IwaraFollowersExtractor(IwaraExtractor):
 class IwaraImageExtractor(IwaraExtractor):
     """Extractor for individual iwara.tv image pages"""
     subcategory = "image"
-    pattern = rf"{BASE_PATTERN}/image/([^/?#]+)"
+    pattern = BASE_PATTERN + r"/image/([^/?#]+)"
     example = "https://www.iwara.tv/image/ID"
 
     def items(self):
@@ -235,7 +238,7 @@ class IwaraImageExtractor(IwaraExtractor):
 class IwaraVideoExtractor(IwaraExtractor):
     """Extractor for individual iwara.tv videos"""
     subcategory = "video"
-    pattern = rf"{BASE_PATTERN}/video/([^/?#]+)"
+    pattern = BASE_PATTERN + r"/video/([^/?#]+)"
     example = "https://www.iwara.tv/video/ID"
 
     def items(self):
@@ -245,7 +248,7 @@ class IwaraVideoExtractor(IwaraExtractor):
 class IwaraPlaylistExtractor(IwaraExtractor):
     """Extractor for individual iwara.tv playlist pages"""
     subcategory = "playlist"
-    pattern = rf"{BASE_PATTERN}/playlist/([^/?#]+)"
+    pattern = BASE_PATTERN + r"/playlist/([^/?#]+)"
     example = "https://www.iwara.tv/playlist/ID"
 
     def items(self):
@@ -254,7 +257,7 @@ class IwaraPlaylistExtractor(IwaraExtractor):
 
 class IwaraFavoriteExtractor(IwaraExtractor):
     subcategory = "favorite"
-    pattern = rf"{BASE_PATTERN}/favorites(?:/(image|video)s)?"
+    pattern = BASE_PATTERN + r"/favorites(?:/(image|video)s)?"
     example = "https://www.iwara.tv/favorites/videos"
 
     def items(self):
@@ -265,7 +268,7 @@ class IwaraFavoriteExtractor(IwaraExtractor):
 class IwaraSearchExtractor(IwaraExtractor):
     """Extractor for iwara.tv search pages"""
     subcategory = "search"
-    pattern = rf"{BASE_PATTERN}/search\?([^#]+)"
+    pattern = BASE_PATTERN + r"/search\?([^#]+)"
     example = "https://www.iwara.tv/search?query=QUERY&type=TYPE"
 
     def items(self):
@@ -278,7 +281,7 @@ class IwaraSearchExtractor(IwaraExtractor):
 class IwaraTagExtractor(IwaraExtractor):
     """Extractor for iwara.tv tag search"""
     subcategory = "tag"
-    pattern = rf"{BASE_PATTERN}/(image|video)s(?:\?([^#]+))?"
+    pattern = BASE_PATTERN + r"/(image|video)s(?:\?([^#]+))?"
     example = "https://www.iwara.tv/videos?tags=TAGS"
 
     def items(self):
@@ -295,7 +298,7 @@ class IwaraAPI():
     def __init__(self, extractor):
         self.extractor = extractor
         self.headers = {
-            "Referer"     : f"{extractor.root}/",
+            "Referer"     : extractor.root + "/",
             "Content-Type": "application/json",
             "Origin"      : extractor.root,
         }
@@ -305,15 +308,15 @@ class IwaraAPI():
             self.authenticate = util.noop
 
     def image(self, image_id):
-        endpoint = f"/image/{image_id}"
+        endpoint = "/image/" + image_id
         return self._call(endpoint)
 
     def video(self, video_id):
-        endpoint = f"/video/{video_id}"
+        endpoint = "/video/" + video_id
         return self._call(endpoint)
 
     def playlist(self, playlist_id):
-        endpoint = f"/playlist/{playlist_id}"
+        endpoint = "/playlist/" + playlist_id
         return self._pagination(endpoint)
 
     def detail(self, media):
@@ -353,7 +356,7 @@ class IwaraAPI():
 
     @memcache(keyarg=1)
     def profile(self, username):
-        endpoint = f"/profile/{username}"
+        endpoint = "/profile/" + username
         return self._call(endpoint)
 
     def user_following(self, user_id):
@@ -384,7 +387,7 @@ class IwaraAPI():
         if refresh_token is None:
             self.extractor.log.info("Logging in as %s", username)
 
-            url = f"{self.root}/user/login"
+            url = self.root + "/user/login"
             json = {
                 "email"   : username,
                 "password": self.password
@@ -400,15 +403,15 @@ class IwaraAPI():
 
         self.extractor.log.info("Refreshing access token for %s", username)
 
-        url = f"{self.root}/user/token"
-        headers = {"Authorization": f"Bearer {refresh_token}", **self.headers}
+        url = self.root + "/user/token"
+        headers = {"Authorization": "Bearer " + refresh_token, **self.headers}
         data = self.extractor.request_json(
             url, method="POST", headers=headers, fatal=False)
 
         if not (access_token := data.get("accessToken")):
             self.extractor.log.debug(data)
             raise exception.AuthenticationError(data.get("message"))
-        return f"Bearer {access_token}"
+        return "Bearer " + access_token
 
     def _call(self, endpoint, params=None, headers=None):
         if headers is None:

@@ -46,7 +46,7 @@ class DynastyscansChapterExtractor(DynastyscansBase, ChapterExtractor):
 
     def metadata(self, page):
         extr = text.extract_from(page)
-        match = util.re(
+        match = text.re(
             r"(?:<a[^>]*>)?([^<]+)(?:</a>)?"  # manga name
             r"(?: ch(\d+)([^:<]*))?"  # chapter info
             r"(?:: (.+))?"  # title
@@ -62,7 +62,7 @@ class DynastyscansChapterExtractor(DynastyscansBase, ChapterExtractor):
             "author"  : text.remove_html(author),
             "group"   : (text.remove_html(group) or
                          text.extr(group, ' alt="', '"')),
-            "date"    : text.parse_datetime(extr(
+            "date"    : self.parse_datetime(extr(
                 '"icon-calendar"></i> ', '<'), "%b %d, %Y"),
             "tags"    : text.split_html(extr(
                 "class='tags'>", "<div id='chapter-actions'")),
@@ -105,7 +105,7 @@ class DynastyscansSearchExtractor(DynastyscansBase, Extractor):
         self.query = match[1] or ""
 
     def items(self):
-        yield Message.Directory, {}
+        yield Message.Directory, "", {}
         for image_id in self.images():
             image = self._parse_image_page(image_id)
             url = image["url"]
@@ -166,8 +166,6 @@ class DynastyscansAnthologyExtractor(DynastyscansSearchExtractor):
             data["scanlator"] = content[1].text[11:]
             data["tags"] = content[2].text[6:].lower().split(", ")
             data["title"] = element[5].text
-            data["date"] = text.parse_datetime(
-                element[1].text, "%Y-%m-%dT%H:%M:%S%z")
-            data["date_updated"] = text.parse_datetime(
-                element[2].text, "%Y-%m-%dT%H:%M:%S%z")
+            data["date"] = self.parse_datetime_iso(element[1].text)
+            data["date_updated"] = self.parse_datetime_iso(element[2].text)
             yield Message.Queue, element[4].text, data

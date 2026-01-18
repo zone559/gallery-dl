@@ -89,8 +89,8 @@ class TapasEpisodeExtractor(TapasExtractor):
 
         html = data["html"]
         episode["series"] = self._extract_series(html)
-        episode["date"] = text.parse_datetime(episode["publish_date"])
-        yield Message.Directory, episode
+        episode["date"] = self.parse_datetime_iso(episode["publish_date"])
+        yield Message.Directory, "", episode
 
         if episode["book"]:
             content = text.extr(
@@ -102,6 +102,7 @@ class TapasEpisodeExtractor(TapasExtractor):
         else:  # comic
             for episode["num"], url in enumerate(text.extract_iter(
                     html, 'data-src="', '"'), 1):
+                url = text.unescape(url)
                 yield Message.Url, url, text.nameext_from_url(url, episode)
 
     def _extract_series(self, html):

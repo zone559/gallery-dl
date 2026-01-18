@@ -20,7 +20,7 @@ class ShopifyExtractor(BaseExtractor):
 
     def items(self):
         data = self.metadata()
-        yield Message.Directory, data
+        yield Message.Directory, "", data
 
         for product in self.products():
             for num, image in enumerate(product.pop("images"), 1):
@@ -83,7 +83,7 @@ BASE_PATTERN = ShopifyExtractor.update({
         "root": "https://www.windsorstore.com",
         "pattern": r"(?:www\.)?windsorstore\.com",
     },
-})
+}) + "(?:/[a-z]{2}(?:-[^/?#]+)?)?"
 
 
 class ShopifyCollectionExtractor(ShopifyExtractor):

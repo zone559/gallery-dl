@@ -100,7 +100,8 @@ class LensdumpImageExtractor(LensdumpBase, Extractor):
     filename_fmt = "{category}_{id}{title:?_//}.{extension}"
     directory_fmt = ("{category}",)
     archive_fmt = "{id}"
-    pattern = r"(?:https?://)?(?:(?:i\d?\.)?lensdump\.com|\w\.l3n\.co)/i/(\w+)"
+    pattern = (r"(?:https?://)?(?:(?:i\d?\.)?lensdump\.com|\w\.l3n\.co)"
+               r"/(?:i/)?(\w+)")
     example = "https://lensdump.com/i/ID"
 
     def items(self):
@@ -118,10 +119,9 @@ class LensdumpImageExtractor(LensdumpBase, Extractor):
                 'property="image:width" content="', '"')),
             "height": text.parse_int(extr(
                 'property="image:height" content="', '"')),
-            "date"  : text.parse_datetime(extr(
-                '<span title="', '"'), "%Y-%m-%d %H:%M:%S"),
+            "date"  : self.parse_datetime_iso(extr('<span title="', '"')),
         }
 
         text.nameext_from_url(data["url"], data)
-        yield Message.Directory, data
+        yield Message.Directory, "", data
         yield Message.Url, data["url"], data

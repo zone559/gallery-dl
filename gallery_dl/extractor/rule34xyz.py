@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Copyright 2024-2025 Mike Fährmann
+# Copyright 2024-2026 Mike Fährmann
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License version 2 as
@@ -13,7 +13,7 @@ from .. import text, exception
 from ..cache import cache
 import collections
 
-BASE_PATTERN = r"(?:https?://)?rule34\.xyz"
+BASE_PATTERN = r"(?:https?://)?(?:www\.)?rule34\.xyz"
 
 
 class Rule34xyzExtractor(BooruExtractor):
@@ -30,6 +30,8 @@ class Rule34xyzExtractor(BooruExtractor):
         2   : "copyright",
         4   : "character",
         8   : "artist",
+        16  : "system",
+        32  : "meta",
     }
     FORMATS = {
         "10" : "pic.jpg",
@@ -68,8 +70,7 @@ class Rule34xyzExtractor(BooruExtractor):
 
     def _prepare(self, post):
         post.pop("files", None)
-        post["date"] = text.parse_datetime(
-            post["created"], "%Y-%m-%dT%H:%M:%S.%fZ")
+        post["date"] = self.parse_datetime_iso(post["created"])
         post["filename"], _, post["format"] = post["filename"].rpartition(".")
         if "tags" in post:
             post["tags"] = [t["value"] for t in post["tags"]]
@@ -121,13 +122,13 @@ class Rule34xyzExtractor(BooruExtractor):
     def _login_impl(self, username, password):
         self.log.info("Logging in as %s", username)
 
-        url = f"{self.root}/api/v2/auth/signin"
+        url = self.root + "/api/v2/auth/signin"
         data = {"email": username, "password": password}
         response = self.request_json(
             url, method="POST", json=data, fatal=False)
 
         if jwt := response.get("jwt"):
-            return f"Bearer {jwt}"
+            return "Bearer " + jwt
         raise exception.AuthenticationError(
             (msg := response.get("message")) and f'"{msg}"')
 

@@ -31,7 +31,7 @@ class FoolfuukaExtractor(BaseExtractor):
             self.fixup_redirect = False
 
     def items(self):
-        yield Message.Directory, self.metadata()
+        yield Message.Directory, "", self.metadata()
         for post in self.posts():
             media = post["media"]
             if not media:
@@ -278,7 +278,7 @@ class FoolfuukaGalleryExtractor(FoolfuukaExtractor):
         base = f"{self.root}/_/api/chan/gallery/?board={self.board}&page="
 
         for pnum in pages:
-            posts = self.request_json(f"{base}{pnum}")
+            posts = self.request_json(base + str(pnum))
             if not posts:
                 return
             yield from posts

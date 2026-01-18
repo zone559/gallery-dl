@@ -64,10 +64,9 @@ class MastodonExtractor(BaseExtractor):
 
             status["count"] = len(attachments)
             status["tags"] = [tag["name"] for tag in status["tags"]]
-            status["date"] = text.parse_datetime(
-                status["created_at"][:19], "%Y-%m-%dT%H:%M:%S")
+            status["date"] = self.parse_datetime_iso(status["created_at"][:19])
 
-            yield Message.Directory, status
+            yield Message.Directory, "", status
             for status["num"], media in enumerate(attachments, 1):
                 status["media"] = media
                 url = media["url"]
@@ -319,10 +318,8 @@ class MastodonAPI():
             if code == 404:
                 raise exception.NotFoundError()
             if code == 429:
-                self.extractor.wait(until=text.parse_datetime(
-                    response.headers["x-ratelimit-reset"],
-                    "%Y-%m-%dT%H:%M:%S.%fZ",
-                ))
+                self.extractor.wait(until=self.extractor.parse_datetime_iso(
+                    response.headers["x-ratelimit-reset"]))
                 continue
             raise exception.AbortExtraction(response.json().get("error"))
 

@@ -195,7 +195,7 @@ class UpdateExtractor(Extractor):
         url = f"{self.root_api}/repos/{path_repo}/releases/{path_tag}"
         headers = {
             "Accept": "application/vnd.github+json",
-            "User-Agent": util.USERAGENT,
+            "User-Agent": util.USERAGENT_GALLERYDL,
             "X-GitHub-Api-Version": "2022-11-28",
         }
         data = self.request(url, headers=headers, notfound="tag").json()
@@ -212,5 +212,5 @@ class UpdateExtractor(Extractor):
         url = (f"{self.root}/{path_repo}/releases/download"
                f"/{data['tag_name']}/{binary_name}")
 
-        yield Message.Directory, data
+        yield Message.Directory, "", data
         yield Message.Url, url, data

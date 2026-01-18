@@ -51,8 +51,16 @@ class VipergirlsExtractor(Extractor):
                 like = False
 
         posts = root.iter("post")
-        if self.page:
-            util.advance(posts, (text.parse_int(self.page[5:]) - 1) * 15)
+        if (order := self.config("order-posts")) and \
+                order[0] not in ("d", "r"):
+            if self.page:
+                util.advance(posts, (text.parse_int(self.page[5:]) - 1) * 15)
+        else:
+            posts = list(posts)
+            if self.page:
+                offset = text.parse_int(self.page[5:]) * 15
+                posts = posts[:offset]
+            posts.reverse()
 
         for post in posts:
             images = list(post)
@@ -67,7 +75,7 @@ class VipergirlsExtractor(Extractor):
             data["count"] = len(images)
             del data["imagecount"]
 
-            yield Message.Directory, data
+            yield Message.Directory, "", data
             if images:
                 for data["num"], image in enumerate(images, 1):
                     yield Message.Queue, image.attrib["main_url"], data
@@ -86,7 +94,7 @@ class VipergirlsExtractor(Extractor):
     def _login_impl(self, username, password):
         self.log.info("Logging in as %s", username)
 
-        url = f"{self.root}/login.php?do=login"
+        url = self.root + "/login.php?do=login"
         data = {
             "vb_login_username": username,
             "vb_login_password": password,

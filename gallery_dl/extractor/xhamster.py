@@ -36,7 +36,7 @@ class XhamsterGalleryExtractor(XhamsterExtractor):
 
     def items(self):
         data = self.metadata()
-        yield Message.Directory, data
+        yield Message.Directory, "", data
         for num, image in enumerate(self.images(), 1):
             url = image["imageURL"]
             image.update(data)
@@ -67,7 +67,7 @@ class XhamsterGalleryExtractor(XhamsterExtractor):
             {
                 "id"         : text.parse_int(gallery["id"]),
                 "tags"       : [t["label"] for t in info["categoriesTags"]],
-                "date"       : text.parse_timestamp(model["created"]),
+                "date"       : self.parse_timestamp(model["created"]),
                 "views"      : text.parse_int(model["views"]),
                 "likes"      : text.parse_int(model["rating"]["likes"]),
                 "dislikes"   : text.parse_int(model["rating"]["dislikes"]),

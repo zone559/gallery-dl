@@ -53,16 +53,17 @@ AUTH_REQUIRED = {
     "fantia",
     "instagram",
     "twitter",
+    "poipiku",
 }
 
-AUTH_KEYS = (
+AUTH_KEYS = {
     "username",
     "cookies",
     "api-key",
     "client-id",
     "access-token",
     "refresh-token",
-)
+}
 
 
 class TestExtractorResults(unittest.TestCase):
@@ -144,7 +145,7 @@ class TestExtractorResults(unittest.TestCase):
             for key in AUTH_KEYS:
                 config.set((), key, None)
 
-        if auth and not any(extr.config(key) for key in AUTH_KEYS):
+        if auth and not self._has_auth(extr, auth):
             self._skipped.append((result["#url"], "no auth"))
             self.skipTest("no auth")
 
@@ -200,7 +201,7 @@ class TestExtractorResults(unittest.TestCase):
                     extr = kwdict["_extractor"].from_url(url)
                     if extr is None and not result.get("#extractor", True):
                         continue
-                    self.assertIsInstance(extr, kwdict["_extractor"])
+                    self.assertIsInstance(extr, kwdict["_extractor"], msg=url)
                     self.assertEqual(extr.url, url)
         else:
             # test 'extension' entries
@@ -270,6 +271,19 @@ class TestExtractorResults(unittest.TestCase):
             for kwdict in kwdicts:
                 self._test_kwdict(kwdict, metadata)
 
+    def _has_auth(self, extr, auth):
+        if auth is True:
+            auth = AUTH_KEYS
+
+        if isinstance(auth, str):
+            return extr.config(auth)
+        if isinstance(auth, set):
+            return any(self._has_auth(extr, a) for a in auth)
+        if isinstance(auth, (tuple, list)):
+            return all(self._has_auth(extr, k) for k in auth)
+
+        self.fail(f"Invalid '#auth' value: {auth!r}")
+
     def _test_kwdict(self, kwdict, tests, parent=None):
         for key, test in tests.items():
 
@@ -309,10 +323,15 @@ class TestExtractorResults(unittest.TestCase):
         elif isinstance(test, range):
             self.assertRange(value, test, msg=path)
         elif isinstance(test, set):
-            try:
-                self.assertIn(value, test, msg=path)
-            except AssertionError:
-                self.assertIn(type(value), test, msg=path)
+            if isinstance(value, list):
+                value = tuple(value)
+            for item in test:
+                if isinstance(item, type) and isinstance(value, item) or \
+                        value == item:
+                    break
+            else:
+                v = type(value) if len(str(value)) > 64 else value
+                self.fail(f"{v!r} not in {test}: {path}")
         elif isinstance(test, list):
             subtest = False
             for idx, item in enumerate(test):
@@ -348,6 +367,17 @@ class TestExtractorResults(unittest.TestCase):
                     for _ in value:
                         len_value += 1
                 self.assertEqual(int(length), len_value, msg=path)
+            elif test.startswith("hash:"):
+                digest = test[5:].lower()
+                msg = f"{path} / {digest}"
+                if digest == "md5":
+                    self.assertRegex(value, r"^[0-9a-fA-F]{32}$", msg)
+                elif digest == "sha1":
+                    self.assertRegex(value, r"^[0-9a-fA-F]{40}$", msg)
+                elif digest == "sha256":
+                    self.assertRegex(value, r"^[0-9a-fA-F]{64}$", msg)
+                elif digest == "sha512":
+                    self.assertRegex(value, r"^[0-9a-fA-F]{128}$", msg)
             elif test.startswith("iso:"):
                 iso = test[4:]
                 if iso in ("dt", "datetime", "8601"):
@@ -361,6 +391,12 @@ class TestExtractorResults(unittest.TestCase):
                     msg = f"{path} / ISO 639-1"
                     self.assertIsInstance(value, str, msg=msg)
                     self.assertRegex(value, r"^[a-z]{2}(-\w+)?$", msg=msg)
+                elif iso in ("uuid", "11578", "11578:1996", "4122"):
+                    msg = f"{path} / ISO 11578:1996"
+                    pat = (r"(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-"
+                           r"[0-9a-f]{4}-[0-9a-f]{12}")
+                    self.assertIsInstance(value, str, msg=msg)
+                    self.assertRegex(value, pat, msg=msg)
                 else:
                     self.fail(f"Unsupported ISO test '{test}'")
             else:
@@ -377,6 +413,7 @@ class ResultJob(job.DownloadJob):
         self.queue = False
         self.content = content
 
+        self.format = format
         self.url_list = []
         self.url_hash = hashlib.sha1()
         self.kwdict_list = []
@@ -391,22 +428,9 @@ class ResultJob(job.DownloadJob):
         else:
             self._update_content = lambda url, kwdict: None
 
-        if format:
-            self.format_directory = TestFormatter(
-                "".join(self.extractor.directory_fmt)).format_map
-            self.format_filename = TestFormatter(
-                self.extractor.filename_fmt).format_map
-            self.format_archive = TestFormatter(
-                self.extractor.archive_fmt).format_map
-        else:
-            self.format_directory = \
-                self.format_filename = \
-                self.format_archive = lambda kwdict: ""
-
     def run(self):
         self._init()
-        for msg in self.extractor:
-            self.dispatch(msg)
+        self.dispatch(self.extractor)
 
     def handle_url(self, url, kwdict, fallback=None):
         self._update_url(url)
@@ -416,6 +440,20 @@ class ResultJob(job.DownloadJob):
         self.format_filename(kwdict)
 
     def handle_directory(self, kwdict):
+        if self.format is not None:
+            if self.format:
+                self.format_directory = TestFormatter(
+                    "".join(self.extractor.directory_fmt)).format_map
+                self.format_filename = TestFormatter(
+                    self.extractor.filename_fmt).format_map
+                self.format_archive = TestFormatter(
+                    self.extractor.archive_fmt).format_map
+            else:
+                self.format_directory = \
+                    self.format_filename = \
+                    self.format_archive = lambda kwdict: ""
+            self.format = None
+
         self._update_kwdict(kwdict, False)
         self.format_directory(kwdict)
 
@@ -499,6 +537,9 @@ class TestFormatter(formatter.StringFormatter):
                     return fmt(obj[key])
                 except KeyError:
                     return ""
+        elif "<function identity at " in repr(fmt):
+            def wrap(obj):
+                return "".join(obj[key])
         else:
             def wrap(obj):
                 return fmt(obj[key])
@@ -511,6 +552,9 @@ class TestFormatter(formatter.StringFormatter):
                 for func in funcs:
                     obj = func(obj)
                 return fmt(obj)
+        elif "<function identity at " in repr(fmt):
+            def wrap(obj):
+                return "".join(obj[key])
         else:
             def wrap(obj):
                 obj = obj[key]

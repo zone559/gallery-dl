@@ -9,7 +9,7 @@
 """Extractors for https://www.patreon.com/"""
 
 from .common import Extractor, Message
-from .. import text, util, exception
+from .. import text, util, dt, exception
 from ..cache import memcache
 import collections
 import itertools
@@ -46,20 +46,21 @@ class PatreonExtractor(Extractor):
 
         for post in self.posts():
 
-            yield Message.Directory, post
+            yield Message.Directory, "", post
             if not post.get("current_user_can_view", True):
                 self.log.warning("Not allowed to view post %s", post["id"])
                 continue
 
             post["num"] = 0
             hashes = set()
-            for kind, url, name in itertools.chain.from_iterable(
+            for kind, file, url, name in itertools.chain.from_iterable(
                     g(post) for g in generators):
                 fhash = self._filehash(url)
                 if fhash not in hashes or not fhash:
                     hashes.add(fhash)
                     post["hash"] = fhash
                     post["type"] = kind
+                    post["file"] = file
                     post["num"] += 1
                     text.nameext_from_url(name, post)
                     if text.ext_from_url(url) == "m3u8":
@@ -86,7 +87,7 @@ class PatreonExtractor(Extractor):
                     name = url
                 else:
                     name = self._filename(url) or url
-            return (("postfile", url, name),)
+            return (("postfile", postfile, url, name),)
         return ()
 
     def _images(self, post):
@@ -94,7 +95,7 @@ class PatreonExtractor(Extractor):
             for image in images:
                 if url := self._images_url(image):
                     name = image.get("file_name") or self._filename(url) or url
-                    yield "image", url, name
+                    yield "image", image, url, name
 
     def _images_url(self, image):
         return image.get("download_url")
@@ -109,24 +110,24 @@ class PatreonExtractor(Extractor):
         if image := post.get("image"):
             if url := image.get("large_url"):
                 name = image.get("file_name") or self._filename(url) or url
-                return (("image_large", url, name),)
+                return (("image_large", image, url, name),)
         return ()
 
     def _attachments(self, post):
         for attachment in post.get("attachments") or ():
             if url := self.request_location(attachment["url"], fatal=False):
-                yield "attachment", url, attachment["name"]
+                yield "attachment", attachment, url, attachment["name"]
 
         for attachment in post.get("attachments_media") or ():
             if url := attachment.get("download_url"):
-                yield "attachment", url, attachment["file_name"]
+                yield "attachment", attachment, url, attachment["file_name"]
 
     def _content(self, post):
         if content := post.get("content"):
             for img in text.extract_iter(
                     content, '<img data-media-id="', '>'):
                 if url := text.extr(img, 'src="', '"'):
-                    yield "content", url, self._filename(url) or url
+                    yield "content", None, url, self._filename(url) or url
 
     def posts(self):
         """Return all relevant post objects"""
@@ -177,8 +178,7 @@ class PatreonExtractor(Extractor):
             post, included, "attachments")
         attr["attachments_media"] = self._files(
             post, included, "attachments_media")
-        attr["date"] = text.parse_datetime(
-            attr["published_at"], "%Y-%m-%dT%H:%M:%S.%f%z")
+        attr["date"] = self.parse_datetime_iso(attr["published_at"])
 
         try:
             attr["campaign"] = (included["campaign"][
@@ -226,8 +226,16 @@ class PatreonExtractor(Extractor):
         user = response.json()["data"]
         attr = user["attributes"]
         attr["id"] = user["id"]
-        attr["date"] = text.parse_datetime(
-            attr["created"], "%Y-%m-%dT%H:%M:%S.%f%z")
+        attr["date"] = self.parse_datetime_iso(attr["created"])
+        return attr
+
+    def _collection(self, collection_id):
+        url = f"{self.root}/api/collection/{collection_id}"
+        data = self.request_json(url)
+        coll = data["data"]
+        attr = coll["attributes"]
+        attr["id"] = coll["id"]
+        attr["date"] = self.parse_datetime_iso(attr["created_at"])
         return attr
 
     def _filename(self, url):
@@ -246,7 +254,7 @@ class PatreonExtractor(Extractor):
                 return part
         return ""
 
-    def _build_url(self, endpoint, query):
+    def _build_url(self, endpoint, sort, query):
         return (
             f"https://www.patreon.com/api/{endpoint}"
 
@@ -281,10 +289,19 @@ class PatreonExtractor(Extractor):
             "preview_views,video_duration"
 
             f"&page[cursor]={self._init_cursor()}"
-            f"{query}"
+            f"{query}{self._order(sort)}"
 
             "&json-api-version=1.0"
         )
+
+    def _order(self, sort):
+        if order := self.config("order-posts"):
+            if order in {"d", "desc"}:
+                order = "-published_at"
+            elif order in {"a", "asc", "r", "reverse"}:
+                order = "published_at"
+            return "&sort=" + order
+        return "&sort=" + sort if sort else ""
 
     def _build_file_generators(self, filetypes):
         if filetypes is None:
@@ -333,6 +350,42 @@ class PatreonExtractor(Extractor):
         raise exception.AbortExtraction("Unable to extract bootstrap data")
 
 
+class PatreonCollectionExtractor(PatreonExtractor):
+    """Extractor for a patreon collection"""
+    subcategory = "collection"
+    directory_fmt = ("{category}", "{creator[full_name]}",
+                     "Collections", "{collection[title]} ({collection[id]})")
+    pattern = r"(?:https?://)?(?:www\.)?patreon\.com/collection/(\d+)"
+    example = "https://www.patreon.com/collection/12345"
+
+    def posts(self):
+        collection_id = self.groups[0]
+        self.kwdict["collection"] = collection = \
+            self._collection(collection_id)
+        campaign_id = text.extr(
+            collection["thumbnail"]["url"], "/campaign/", "/")
+
+        url = self._build_url("posts", "collection_order", (
+            # patreon returns '400 Bad Request' without campaign_id filter
+            f"&filter[campaign_id]={campaign_id}"
+            "&filter[contains_exclusive_posts]=true"
+            "&filter[is_draft]=false"
+            f"&filter[collection_id]={collection_id}"
+            "&filter[include_drops]=true"
+        ))
+        return self._pagination(url)
+
+    def _order(self, sort):
+        if order := self.config("order-posts"):
+            if order in {"a", "asc"}:
+                order = "collection_order"
+            elif order in {"d", "desc", "r", "reverse"}:
+                # "-collection_order" results in a '400 Bad Request' error
+                order = "-published_at"
+            return "&sort=" + order
+        return "&sort=" + sort if sort else ""
+
+
 class PatreonCreatorExtractor(PatreonExtractor):
     """Extractor for a creator's works"""
     subcategory = "creator"
@@ -350,12 +403,11 @@ class PatreonCreatorExtractor(PatreonExtractor):
         campaign_id = self._get_campaign_id(creator, params)
         self.log.debug("campaign_id: %s", campaign_id)
 
-        url = self._build_url("posts", (
+        url = self._build_url("posts", params.get("sort", "-published_at"), (
             f"&filter[campaign_id]={campaign_id}"
             "&filter[contains_exclusive_posts]=true"
             "&filter[is_draft]=false"
             f"{self._get_filters(params)}"
-            f"&sort={params.get('sort', '-published_at')}"
         ))
         return self._pagination(url)
 
@@ -408,11 +460,10 @@ class PatreonUserExtractor(PatreonExtractor):
 
     def posts(self):
         if date_max := self._get_date_min_max(None, None)[1]:
-            self._cursor = cursor = \
-                util.datetime_from_timestamp(date_max).isoformat()
+            self._cursor = cursor = dt.from_ts(date_max).isoformat()
             self._init_cursor = lambda: cursor
 
-        url = self._build_url("stream", (
+        url = self._build_url("stream", None, (
             "&filter[is_following]=true"
             "&json-api-use-default-includes=false"
         ))

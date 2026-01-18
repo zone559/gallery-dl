@@ -12,7 +12,7 @@ from ..cache import memcache
 
 BASE_PATTERN = r"(?:https?://)?(?:[\w-]+\.)?facebook\.com"
 USER_PATTERN = (BASE_PATTERN +
-                r"/(?!media/|photo/|photo.php|watch/)"
+                r"/(?!media/|photo/|photo.php|watch/|permalink.php)"
                 r"(?:profile\.php\?id=|people/[^/?#]+/)?([^/?&#]+)")
 
 
@@ -108,7 +108,7 @@ class FacebookExtractor(Extractor):
                 '"message":{"delight_ranges"',
                 '"},"message_preferred_body"'
             ).rsplit('],"text":"', 1)[-1]),
-            "date": text.parse_timestamp(
+            "date": self.parse_timestamp(
                 text.extr(photo_page, '\\"publish_time\\":', ',') or
                 text.extr(photo_page, '"created_time":', ',')
             ),
@@ -172,7 +172,7 @@ class FacebookExtractor(Extractor):
             "user_id": text.extr(
                 video_page, '"owner":{"__typename":"User","id":"', '"'
             ),
-            "date": text.parse_timestamp(text.extr(
+            "date": self.parse_timestamp(text.extr(
                 video_page, '\\"publish_time\\":', ','
             )),
             "type": "video"
@@ -237,16 +237,14 @@ class FacebookExtractor(Extractor):
 
         if res.url.startswith(self.root + "/login"):
             raise exception.AuthRequired(
-                message=(f"You must be logged in to continue viewing images."
-                         f"{LEFT_OFF_TXT}")
-            )
+                message=("You must be logged in to continue viewing images." +
+                         LEFT_OFF_TXT))
 
         if b'{"__dr":"CometErrorRoot.react"}' in res.content:
             raise exception.AbortExtraction(
-                f"You've been temporarily blocked from viewing images.\n"
-                f"Please try using a different account, "
-                f"using a VPN or waiting before you retry.{LEFT_OFF_TXT}"
-            )
+                "You've been temporarily blocked from viewing images.\n"
+                "Please try using a different account, "
+                "using a VPN or waiting before you retry." + LEFT_OFF_TXT)
 
         return res
 
@@ -292,7 +290,7 @@ class FacebookExtractor(Extractor):
             else:
                 retries = 0
                 photo.update(set_data)
-                yield Message.Directory, photo
+                yield Message.Directory, "", photo
                 yield Message.Url, photo["url"], photo
 
             if not photo["next_photo_id"]:
@@ -306,6 +304,12 @@ class FacebookExtractor(Extractor):
                         "Detected a loop in the set, it's likely finished. "
                         "Extraction is over."
                     )
+            elif int(photo["next_photo_id"]) > int(photo["id"]) + i*120:
+                self.log.info(
+                    "Detected jump to the beginning of the set. (%s -> %s)",
+                    photo["id"], photo["next_photo_id"])
+                if self.config("loop", False):
+                    all_photo_ids.append(photo["next_photo_id"])
             else:
                 all_photo_ids.append(photo["next_photo_id"])
 
@@ -369,11 +373,58 @@ class FacebookExtractor(Extractor):
                 for edge in (user["profile_tabs"]["profile_user"]
                              ["timeline_nav_app_sections"]["edges"])
             ]
+
+            if bio := text.extr(page, '"best_description":{"text":"', '"'):
+                user["biography"] = self.decode_all(bio)
+            elif (pos := page.find(
+                    '"__module_operation_ProfileCometTileView_profileT')) >= 0:
+                user["biography"] = self.decode_all(text.rextr(
+                    page, '"text":"', '"', pos))
+            else:
+                user["biography"] = text.unescape(text.remove_html(text.extr(
+                    page, "</span></span></h2>", "<ul>")))
         except Exception:
             if user is None:
                 self.log.debug("Failed to extract user data: %s", data)
                 user = {}
         return user
+
+
+class FacebookPhotoExtractor(FacebookExtractor):
+    """Base class for Facebook Photo extractors"""
+    subcategory = "photo"
+    pattern = (BASE_PATTERN +
+               r"/(?:[^/?#]+/photos/[^/?#]+/|photo(?:.php)?/?\?"
+               r"(?:[^&#]+&)*fbid=)([^/?&#]+)[^/?#]*(?<!&setextract)$")
+    example = "https://www.facebook.com/photo/?fbid=PHOTO_ID"
+
+    def items(self):
+        photo_id = self.groups[0]
+        photo_url = f"{self.root}/photo/?fbid={photo_id}&set="
+        photo_page = self.photo_page_request_wrapper(photo_url).text
+
+        i = 1
+        photo = self.parse_photo_page(photo_page)
+        photo["num"] = i
+
+        set_url = f"{self.root}/media/set/?set={photo['set_id']}"
+        set_page = self.request(set_url).text
+
+        directory = self.parse_set_page(set_page)
+
+        yield Message.Directory, "", directory
+        yield Message.Url, photo["url"], photo
+
+        if self.author_followups:
+            for comment_photo_id in photo["followups_ids"]:
+                comment_photo = self.parse_photo_page(
+                    self.photo_page_request_wrapper(
+                        f"{self.root}/photo/?fbid={comment_photo_id}&set="
+                    ).text
+                )
+                i += 1
+                comment_photo["num"] = i
+                yield Message.Url, comment_photo["url"], comment_photo
 
 
 class FacebookSetExtractor(FacebookExtractor):
@@ -404,43 +455,6 @@ class FacebookSetExtractor(FacebookExtractor):
         return self.extract_set(set_data)
 
 
-class FacebookPhotoExtractor(FacebookExtractor):
-    """Base class for Facebook Photo extractors"""
-    subcategory = "photo"
-    pattern = (BASE_PATTERN +
-               r"/(?:[^/?#]+/photos/[^/?#]+/|photo(?:.php)?/?\?"
-               r"(?:[^&#]+&)*fbid=)([^/?&#]+)[^/?#]*(?<!&setextract)$")
-    example = "https://www.facebook.com/photo/?fbid=PHOTO_ID"
-
-    def items(self):
-        photo_id = self.groups[0]
-        photo_url = f"{self.root}/photo/?fbid={photo_id}&set="
-        photo_page = self.photo_page_request_wrapper(photo_url).text
-
-        i = 1
-        photo = self.parse_photo_page(photo_page)
-        photo["num"] = i
-
-        set_url = f"{self.root}/media/set/?set={photo['set_id']}"
-        set_page = self.request(set_url).text
-
-        directory = self.parse_set_page(set_page)
-
-        yield Message.Directory, directory
-        yield Message.Url, photo["url"], photo
-
-        if self.author_followups:
-            for comment_photo_id in photo["followups_ids"]:
-                comment_photo = self.parse_photo_page(
-                    self.photo_page_request_wrapper(
-                        f"{self.root}/photo/?fbid={comment_photo_id}&set="
-                    ).text
-                )
-                i += 1
-                comment_photo["num"] = i
-                yield Message.Url, comment_photo["url"], comment_photo
-
-
 class FacebookVideoExtractor(FacebookExtractor):
     """Base class for Facebook Video extractors"""
     subcategory = "video"
@@ -458,7 +472,7 @@ class FacebookVideoExtractor(FacebookExtractor):
         if "url" not in video:
             return
 
-        yield Message.Directory, video
+        yield Message.Directory, "", video
 
         if self.videos == "ytdl":
             yield Message.Url, "ytdl:" + video_url, video
@@ -477,7 +491,7 @@ class FacebookInfoExtractor(FacebookExtractor):
 
     def items(self):
         user = self._extract_profile(self.groups[0])
-        return iter(((Message.Directory, user),))
+        return iter(((Message.Directory, "", user),))
 
 
 class FacebookAlbumsExtractor(FacebookExtractor):
@@ -549,7 +563,7 @@ class FacebookAvatarExtractor(FacebookExtractor):
         set_page = self.request(set_url).text
         directory = self.parse_set_page(set_page)
 
-        yield Message.Directory, directory
+        yield Message.Directory, "", directory
         yield Message.Url, avatar["url"], avatar
 
 

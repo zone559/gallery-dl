@@ -7,7 +7,7 @@
 """Extractors for Postmill instances"""
 
 from .common import BaseExtractor, Message
-from .. import text, util, exception
+from .. import text, exception
 
 
 class PostmillExtractor(BaseExtractor):
@@ -20,8 +20,8 @@ class PostmillExtractor(BaseExtractor):
     def _init(self):
         self.instance = self.root.partition("://")[2]
         self.save_link_post_body = self.config("save-link-post-body", False)
-        self._search_canonical_url = util.re(r"/f/([\w\d_]+)/(\d+)/").search
-        self._search_image_tag = util.re(
+        self._search_canonical_url = text.re(r"/f/([\w\d_]+)/(\d+)/").search
+        self._search_image_tag = text.re(
             r'<a href="[^"]+"\n +class="submission__image-link"').search
 
     def items(self):
@@ -31,7 +31,7 @@ class PostmillExtractor(BaseExtractor):
 
             title = text.unescape(extr(
                 '<meta property="og:title" content="', '">'))
-            date = text.parse_datetime(extr(
+            date = self.parse_datetime_iso(extr(
                 '<meta property="og:article:published_time" content="', '">'))
             username = extr(
                 '<meta property="og:article:author" content="', '">')
@@ -72,7 +72,7 @@ class PostmillExtractor(BaseExtractor):
                 urls.append((Message.Queue, url))
 
             data["count"] = len(urls)
-            yield Message.Directory, data
+            yield Message.Directory, "", data
             for data["num"], (msg, url) in enumerate(urls, 1):
                 if url.startswith("text:"):
                     data["filename"], data["extension"] = "", "htm"
@@ -95,7 +95,7 @@ class PostmillSubmissionsExtractor(PostmillExtractor):
             groups[-1]).items() if self.acceptable_query(key)}
 
     def items(self):
-        url = self.root + self.base + self.sorting_path
+        url = f"{self.root}{self.base}{self.sorting_path}"
 
         while url:
             response = self.request(url, params=self.query)
@@ -130,8 +130,8 @@ BASE_PATTERN = PostmillExtractor.update({
     }
 })
 QUERY_RE = r"(?:\?([^#]+))?$"
-SORTING_RE = r"(/(?:hot|new|active|top|controversial|most_commented))?" + \
-    QUERY_RE
+SORTING_RE = (r"(/(?:hot|new|active|top|controversial|most_commented))?" +
+              QUERY_RE)
 
 
 class PostmillPostExtractor(PostmillExtractor):
@@ -146,7 +146,7 @@ class PostmillPostExtractor(PostmillExtractor):
         self.post_id = match[4]
 
     def post_urls(self):
-        return (self.root + "/f/" + self.forum + "/" + self.post_id,)
+        return (f"{self.root}/f/{self.forum}/{self.post_id}",)
 
 
 class PostmillShortURLExtractor(PostmillExtractor):
@@ -165,28 +165,28 @@ class PostmillShortURLExtractor(PostmillExtractor):
 class PostmillHomeExtractor(PostmillSubmissionsExtractor):
     """Extractor for the home page"""
     subcategory = "home"
-    pattern = BASE_PATTERN + r"(/(?:featured|subscribed|all)?)" + SORTING_RE
+    pattern = rf"{BASE_PATTERN}(/(?:featured|subscribed|all)?){SORTING_RE}"
     example = "https://raddle.me/"
 
 
 class PostmillForumExtractor(PostmillSubmissionsExtractor):
     """Extractor for submissions on a forum"""
     subcategory = "forum"
-    pattern = BASE_PATTERN + r"(/f/\w+)" + SORTING_RE
+    pattern = rf"{BASE_PATTERN}(/f/\w+){SORTING_RE}"
     example = "https://raddle.me/f/FORUM"
 
 
 class PostmillUserSubmissionsExtractor(PostmillSubmissionsExtractor):
     """Extractor for submissions made by a user"""
     subcategory = "usersubmissions"
-    pattern = BASE_PATTERN + r"(/user/\w+/submissions)()" + QUERY_RE
+    pattern = rf"{BASE_PATTERN}(/user/\w+/submissions)(){QUERY_RE}"
     example = "https://raddle.me/user/USER/submissions"
 
 
 class PostmillTagExtractor(PostmillSubmissionsExtractor):
     """Extractor for submissions on a forum with a specific tag"""
     subcategory = "tag"
-    pattern = BASE_PATTERN + r"(/tag/\w+)" + SORTING_RE
+    pattern = rf"{BASE_PATTERN}(/tag/\w+){SORTING_RE}"
     example = "https://raddle.me/tag/TAG"
 
 

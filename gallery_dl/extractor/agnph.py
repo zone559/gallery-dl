@@ -9,7 +9,7 @@
 """Extractors for https://agn.ph/"""
 
 from . import booru
-from .. import text, util
+from .. import text
 import collections
 
 BASE_PATTERN = r"(?:https?://)?agn\.ph"
@@ -33,7 +33,7 @@ class AgnphExtractor(booru.BooruExtractor):
         self.cookies.set("confirmed_age", "true", domain="agn.ph")
 
     def _prepare(self, post):
-        post["date"] = text.parse_timestamp(post["created_at"])
+        post["date"] = self.parse_timestamp(post["created_at"])
         post["status"] = post["status"].strip()
         post["has_children"] = ("true" in post["has_children"])
 
@@ -70,7 +70,7 @@ class AgnphExtractor(booru.BooruExtractor):
             return
 
         tags = collections.defaultdict(list)
-        pattern = util.re(r'class="(.)typetag">([^<]+)')
+        pattern = text.re(r'class="(.)typetag">([^<]+)')
         for tag_type, tag_name in pattern.findall(tag_container):
             tags[tag_type].append(text.unquote(tag_name).replace(" ", "_"))
         for key, value in tags.items():

@@ -9,8 +9,7 @@
 """Extractors for https://danbooru.donmai.us/ and other Danbooru instances"""
 
 from .common import BaseExtractor, Message
-from .. import text, util
-import datetime
+from .. import text, util, dt
 
 
 class DanbooruExtractor(BaseExtractor):
@@ -20,7 +19,7 @@ class DanbooruExtractor(BaseExtractor):
     page_limit = 1000
     page_start = None
     per_page = 200
-    useragent = util.USERAGENT
+    useragent = util.USERAGENT_GALLERYDL
     request_interval = (0.5, 1.5)
 
     def _init(self):
@@ -64,13 +63,12 @@ class DanbooruExtractor(BaseExtractor):
             except KeyError:
                 if self.external and post["source"]:
                     post.update(data)
-                    yield Message.Directory, post
+                    yield Message.Directory, "", post
                     yield Message.Queue, post["source"], post
                 continue
 
             text.nameext_from_url(url, post)
-            post["date"] = text.parse_datetime(
-                post["created_at"], "%Y-%m-%dT%H:%M:%S.%f%z")
+            post["date"] = dt.parse_iso(post["created_at"])
 
             post["tags"] = (
                 post["tag_string"].split(" ")
@@ -102,10 +100,13 @@ class DanbooruExtractor(BaseExtractor):
                     post["extension"] = "webm"
 
             if url[0] == "/":
-                url = self.root + url
+                if url[1] == "/":
+                    url = "https:" + url
+                else:
+                    url = self.root + url
 
             post.update(data)
-            yield Message.Directory, post
+            yield Message.Directory, "", post
             yield Message.Url, url, post
 
     def items_artists(self):
@@ -154,7 +155,7 @@ class DanbooruExtractor(BaseExtractor):
                 return
 
             if prefix:
-                params["page"] = f"{prefix}{posts[-1]['id']}"
+                params["page"] = prefix + str(posts[-1]["id"])
             elif params["page"]:
                 params["page"] += 1
             else:
@@ -173,9 +174,8 @@ class DanbooruExtractor(BaseExtractor):
         else:
             ext = data["ZIP:ZipFileName"].rpartition(".")[2]
 
-        fmt = ("{:>06}." + ext).format
         delays = data["Ugoira:FrameDelays"]
-        return [{"file": fmt(index), "delay": delay}
+        return [{"file": f"{index:>06}.{ext}", "delay": delay}
                 for index, delay in enumerate(delays)]
 
     def _collection_posts(self, cid, ctype):
@@ -275,6 +275,23 @@ class DanbooruTagExtractor(DanbooruExtractor):
         return self._pagination("/posts.json", {"tags": self.tags}, prefix)
 
 
+class DanbooruRandomExtractor(DanbooruTagExtractor):
+    """Extractor for a random danbooru post"""
+    subcategory = "random"
+    pattern = BASE_PATTERN + r"/posts/random(?:\?(?:[^&#]*&)*tags=([^&#]*))?"
+    example = "https://danbooru.donmai.us/posts/random?tags=TAG"
+
+    def metadata(self):
+        tags = self.groups[-1] or ""
+        self.tags = text.unquote(tags.replace("+", " "))
+        return {"search_tags": self.tags}
+
+    def posts(self):
+        posts = self.request_json(self.root + "/posts/random.json",
+                                  params={"tags": self.tags or None})
+        return (posts,) if isinstance(posts, dict) else posts
+
+
 class DanbooruPoolExtractor(DanbooruExtractor):
     """Extractor for Danbooru pools"""
     subcategory = "pool"
@@ -326,6 +343,32 @@ class DanbooruPostExtractor(DanbooruExtractor):
         return (post,)
 
 
+class DanbooruMediaassetExtractor(DanbooruExtractor):
+    """Extractor for a danbooru media asset"""
+    subcategory = "media-asset"
+    filename_fmt = "{category}_ma{id}_{filename}.{extension}"
+    archive_fmt = "m{id}"
+    pattern = BASE_PATTERN + r"/media_assets/(\d+)"
+    example = "https://danbooru.donmai.us/media_assets/12345"
+
+    def posts(self):
+        url = f"{self.root}/media_assets/{self.groups[-1]}.json"
+        asset = self.request_json(url)
+
+        asset["file_url"] = asset["variants"][-1]["url"]
+        asset["tag_string"] = \
+            asset["tag_string_artist"] = \
+            asset["tag_string_character"] = \
+            asset["tag_string_copyright"] = \
+            asset["tag_string_general"] = \
+            asset["tag_string_meta"] = ""
+
+        if self.includes:
+            params = {"only": self.includes}
+            asset.update(self.request_json(url, params=params))
+        return (asset,)
+
+
 class DanbooruPopularExtractor(DanbooruExtractor):
     """Extractor for popular images from danbooru"""
     subcategory = "popular"
@@ -337,11 +380,11 @@ class DanbooruPopularExtractor(DanbooruExtractor):
     def metadata(self):
         self.params = params = text.parse_query(self.groups[-1])
         scale = params.get("scale", "day")
-        date = params.get("date") or datetime.date.today().isoformat()
+        date = params.get("date") or dt.date.today().isoformat()
 
         if scale == "week":
-            date = datetime.date.fromisoformat(date)
-            date = (date - datetime.timedelta(days=date.weekday())).isoformat()
+            date = dt.date.fromisoformat(date)
+            date = (date - dt.timedelta(days=date.weekday())).isoformat()
         elif scale == "month":
             date = date[:-3]
 

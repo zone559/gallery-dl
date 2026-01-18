@@ -149,6 +149,19 @@ __tests__ = (
         "tags": [],
         "collectionId": None,
     },
+    "tags[*]": {
+        "automated"  : bool,
+        "concrete"   : bool,
+        "downVotes"  : int,
+        "id"         : int,
+        "lastUpvote" : None,
+        "name"       : str,
+        "needsReview": bool,
+        "nsfwLevel"  : 1,
+        "score"      : int,
+        "type"       : {"Label", "UserGenerated"},
+        "upVotes"    : int,
+    },
     "model": {
         "id": 703211,
         "name": "メイド　クラシック/maid classic",
@@ -467,6 +480,14 @@ __tests__ = (
         "id"  : int,
         "date": "type:datetime",
     },
+},
+
+{
+    "#url"      : "https://civitai.com/user/jackietop515100/posts",
+    "#comment"  : "deleted user (#8299)",
+    "#class"    : civitai.CivitaiUserPostsExtractor,
+    "#options"  : {"timeout": 5, "retries": 2},
+    "#exception": exception.HttpError,
 },
 
 {

@@ -222,10 +222,6 @@ class Formatter(argparse.HelpFormatter):
     def _format_usage(self, usage, actions, groups, prefix):
         return f"Usage: {self._prog} [OPTIONS] URL [URL...]\n"
 
-    def format_help(self):
-        return self._long_break_matcher.sub(
-            "\n\n", self._root_section.format_help())
-
 
 def _parse_option(opt):
     key, _, value = opt.partition("=")
@@ -533,6 +529,11 @@ def build_parser():
               "(e.g. 2.7 or 2.0-3.5)"),
     )
     downloader.add_argument(
+        "--sleep-skip",
+        dest="sleep-skip", metavar="SECONDS", action=ConfigAction,
+        help=("Number of seconds to wait after skipping a file download"),
+    )
+    downloader.add_argument(
         "--sleep-request",
         dest="sleep-request", metavar="SECONDS", action=ConfigAction,
         help=("Number of seconds to wait between HTTP requests "
@@ -702,10 +703,15 @@ def build_parser():
               "(e.g. '5', '8-20', or '1:24:3')"),
     )
     selection.add_argument(
+        "--post-range",
+        dest="post-range", metavar="RANGE", action=ConfigAction,
+        help=("Like '--range', but for posts"),
+    )
+    selection.add_argument(
         "--chapter-range",
         dest="chapter-range", metavar="RANGE", action=ConfigAction,
-        help=("Like '--range', but applies to manga chapters "
-              "and other delegated URLs"),
+        help=("Like '--range', but for child extractors handling "
+              "manga chapters, external URLs, etc."),
     )
     selection.add_argument(
         "--filter",
@@ -717,10 +723,15 @@ def build_parser():
               "rating in ('s', 'q')\""),
     )
     selection.add_argument(
+        "--post-filter",
+        dest="post-filter", metavar="EXPR", action=ConfigAction,
+        help=("Like '--filter', but for posts"),
+    )
+    selection.add_argument(
         "--chapter-filter",
         dest="chapter-filter", metavar="EXPR", action=ConfigAction,
-        help=("Like '--filter', but applies to manga chapters "
-              "and other delegated URLs"),
+        help=("Like '--filter', but for child extractors handling "
+              "manga chapters, external URLs, etc."),
     )
 
     infojson = {

@@ -32,13 +32,15 @@ LICENSE = """\
 def init_extractor(args):
     category = args.category
 
-    files = [(util.path("test", "results", f"{category}.py"),
-              generate_test, False)]
+    files = []
     if args.init_module:
         files.append((util.path("gallery_dl", "extractor", f"{category}.py"),
                       generate_module, False))
         files.append((util.path("gallery_dl", "extractor", "__init__.py"),
                       insert_into_modules_list, True))
+    if args.init_test:
+        files.append((util.path("test", "results", f"{category}.py"),
+                      generate_test, False))
     if args.site_name:
         files.append((util.path("scripts", "supportedsites.py"),
                       insert_into_supportedsites, True))
@@ -89,18 +91,34 @@ def generate_module(args):
 
 def generate_extractors_basic(args):
     cat = args.category
+    ccat = cat.capitalize()
 
-    return f'''\
+    result = f'''\
 from .common import Extractor, Message
 from .. import text
 
 {build_base_pattern(args)}
 
-class {cat.capitalize()}Extractor(Extractor):
+class {ccat}Extractor(Extractor):
     """Base class for {cat} extractors"""
     category = "{cat}"
     root = "{args.root}"
 '''
+
+    for subcat in args.subcategories:
+        subcat = subcat.lower()
+        result = f'''{result}
+
+class {ccat}{subcat.capitalize()}Extractor({ccat}Extractor):
+    subcategory = "{subcat}"
+    pattern = BASE_PATTERN + r"/PATH"
+    example = "{args.root}/PATH"
+
+    def items(self):
+        pass
+'''
+
+    return result
 
 
 def generate_extractors_manga(args):
@@ -110,6 +128,7 @@ def generate_extractors_manga(args):
     return f'''\
 from .common import ChapterExtractor, MangaExtractor
 from .. import text
+from ..cache import memcache
 
 {build_base_pattern(args)}
 
@@ -121,8 +140,8 @@ class {ccat}Base():
 
 class {ccat}ChapterExtractor({ccat}Base, ChapterExtractor):
     """Extractor for {cat} manga chapters"""
-    pattern = rf"{{BASE_PATTERN}}/PATH"
-    example = "{args.root}/..."
+    pattern = BASE_PATTERN + r"/PATH"
+    example = "{args.root}/PATH"
 
     def __init__(self, match):
         url = f"{{self.root}}/PATH"
@@ -132,6 +151,7 @@ class {ccat}ChapterExtractor({ccat}Base, ChapterExtractor):
         chapter, sep, minor = chapter.partition(".")
 
         return {{
+            **_manga_info(self, manga_id),
             "manga"   : text.unescape(manga),
             "manga_id": text.parse_int(manga_id),
             "title"   : "",
@@ -153,8 +173,8 @@ class {ccat}ChapterExtractor({ccat}Base, ChapterExtractor):
 class {ccat}MangaExtractor({ccat}Base, MangaExtractor):
     """Extractor for {cat} manga"""
     chapterclass = {ccat}ChapterExtractor
-    pattern = rf"{{BASE_PATTERN}}/PATH"
-    example = "{args.root}/..."
+    pattern = BASE_PATTERN + r"/PATH"
+    example = "{args.root}/PATH"
 
     def __init__(self, match):
         url = f"{{self.root}}/PATH"
@@ -167,6 +187,11 @@ class {ccat}MangaExtractor({ccat}Base, MangaExtractor):
             results.append((url, None))
 
         return results
+
+
+@memcache(keyarg=1)
+def _manga_info(self, slug):
+    return {{}}
 '''
 
 
@@ -179,7 +204,7 @@ from .common import Extractor, Message, Dispatch
 from .. import text
 
 {build_base_pattern(args)}
-USER_PATTERN = rf"{{BASE_PATTERN}}/([^/?#]+)"
+USER_PATTERN = BASE_PATTERN + r"/([^/?#]+)"
 
 class {ccat}Extractor(Extractor):
     """Base class for {cat} extractors"""
@@ -189,13 +214,13 @@ class {ccat}Extractor(Extractor):
 
 class {ccat}UserExtractor(Dispatch, {ccat}Extractor)
     """Extractor for {cat} user profiles"""
-    pattern = rf"{{USER_PATTERN}}/?(?:$|\\?|#)"
+    pattern = USER_PATTERN + r"/?(?:$|\\?|#)"
     example = "{args.root}/USER/"
 
     def items(self):
-        base = f"{{self.root}}/"
+        base = self.root + "/"
         return self._dispatch_extractors((
-            ({ccat}InfoExtractor, f"{{base}}info"),
+            ({ccat}InfoExtractor, base + "info"),
         ), ("posts",))
 '''
 
@@ -298,11 +323,14 @@ def parse_args(args=None):
     parser = argparse.ArgumentParser(args)
 
     parser.add_argument(
-        "-s", "--site",
+        "-s", "--subcategory",
+        dest="subcategories", metavar="SUBCaT", action="append", default=[])
+    parser.add_argument(
+        "-n", "--name",
         dest="site_name", metavar="TITLE")
     parser.add_argument(
         "-c", "--copyright",
-        dest="copyright", metavar="NAME")
+        dest="copyright", metavar="NAME", default="")
     parser.add_argument(
         "-C",
         dest="copyright", action="store_const", const="Mike Fährmann")
@@ -315,6 +343,9 @@ def parse_args(args=None):
     parser.add_argument(
         "-M", "--no-module",
         dest="init_module", action="store_false")
+    parser.add_argument(
+        "-T", "--no-test",
+        dest="init_test", action="store_false")
     parser.add_argument(
         "-t", "--type",
         dest="type", metavar="TYPE")
@@ -332,6 +363,13 @@ def parse_args(args=None):
     parser.add_argument("root", nargs="?")
 
     args = parser.parse_args()
+    args.category = args.category.lower()
+
+    if "://" in args.category:
+        base = args.category.split("/", 3)
+        if not args.root:
+            args.root = "/".join(base[:3])
+        args.category = re.sub(r"\W+", "", base[2].split(".")[-2])
 
     if root := args.root:
         if "://" in root:

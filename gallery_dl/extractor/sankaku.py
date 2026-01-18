@@ -16,7 +16,7 @@ import collections
 
 BASE_PATTERN = r"(?:https?://)?" \
     r"(?:(?:chan|www|beta|black|white)\.sankakucomplex\.com|sankaku\.app)" \
-    r"(?:/[a-z]{2})?"
+    r"(?:/[a-z]{2}(?:[-_][A-Z]{2})?)?"
 
 
 class SankakuExtractor(BooruExtractor):
@@ -47,7 +47,7 @@ class SankakuExtractor(BooruExtractor):
         self.api = SankakuAPI(self)
         if self.config("tags") == "extended":
             self._tags = self._tags_extended
-            self._tags_findall = util.re(
+            self._tags_findall = text.re(
                 r"tag-type-([^\"' ]+).*?\?tags=([^\"'&]+)").findall
 
     def _file_url(self, post):
@@ -61,13 +61,13 @@ class SankakuExtractor(BooruExtractor):
                 self.log.warning(
                     "Login required to download 'contentious_content' posts")
                 SankakuExtractor._warning = False
-        elif url[8] == "v":
-            url = "https://s.sankakucomplex.com" + url[url.index("/", 8):]
+        elif url[4] != "s":
+            url = "https" + url[4:]
         return url
 
     def _prepare(self, post):
         post["created_at"] = post["created_at"]["s"]
-        post["date"] = text.parse_timestamp(post["created_at"])
+        post["date"] = self.parse_timestamp(post["created_at"])
         post["tags"] = post.pop("tag_names", ())
         post["tag_string"] = " ".join(post["tags"])
         post["_http_validate"] = self._check_expired
@@ -129,10 +129,10 @@ class SankakuTagExtractor(SankakuExtractor):
 
         if "date:" in self.tags:
             # rewrite 'date:' tags (#1790)
-            self.tags = util.re(
+            self.tags = text.re(
                 r"date:(\d\d)[.-](\d\d)[.-](\d\d\d\d)(?!T)").sub(
                 r"date:\3-\2-\1T00:00", self.tags)
-            self.tags = util.re(
+            self.tags = text.re(
                 r"date:(\d\d\d\d)[.-](\d\d)[.-](\d\d)(?!T)").sub(
                 r"date:\1-\2-\3T00:00", self.tags)
 
@@ -193,7 +193,7 @@ class SankakuBooksExtractor(SankakuExtractor):
         params = {"tags": self.tags, "pool_type": "0"}
         for pool in self.api.pools_keyset(params):
             pool["_extractor"] = SankakuPoolExtractor
-            url = f"https://sankaku.app/books/{pool['id']}"
+            url = "https://sankaku.app/books/" + pool["id"]
             yield Message.Queue, url, pool
 
 
@@ -356,6 +356,7 @@ def _authenticate_impl(extr, username, password):
     extr.log.info("Logging in as %s", username)
 
     api = extr.api
+    api.headers["Authorization"] = None
     url = api.ROOT + "/auth/token"
     data = {"login": username, "password": password}
 

@@ -102,8 +102,11 @@ class Ao3Extractor(Extractor):
     def _pagination(self, path, needle='<li id="work_'):
         while True:
             page = self.request(self.root + path).text
+
             yield from text.extract_iter(page, needle, '"')
-            path = text.extr(page, '<a rel="next" href="', '"')
+
+            path = (text.extr(page, '<a rel="next" href="', '"') or
+                    text.extr(page, '<li class="next"><a href="', '"'))
             if not path:
                 return
             path = text.unescape(path)
@@ -179,11 +182,11 @@ class Ao3WorkExtractor(Ao3Extractor):
                 extr('<dd class="freeform tags">', "</dd>")),
             "lang"         : extr('<dd class="language" lang="', '"'),
             "series"       : extr('<dd class="series">', "</dd>"),
-            "date"         : text.parse_datetime(
-                extr('<dd class="published">', "<"), "%Y-%m-%d"),
-            "date_completed": text.parse_datetime(
-                extr('>Completed:</dt><dd class="status">', "<"), "%Y-%m-%d"),
-            "date_updated" : text.parse_timestamp(
+            "date"         : self.parse_datetime_iso(extr(
+                '<dd class="published">', "<")),
+            "date_completed": self.parse_datetime_iso(extr(
+                '>Completed:</dt><dd class="status">', "<")),
+            "date_updated" : self.parse_timestamp(
                 path.rpartition("updated_at=")[2]),
             "words"        : text.parse_int(
                 extr('<dd class="words">', "<").replace(",", "")),
@@ -217,7 +220,7 @@ class Ao3WorkExtractor(Ao3Extractor):
         else:
             data["series"] = None
 
-        yield Message.Directory, data
+        yield Message.Directory, "", data
         for fmt in self.formats:
             try:
                 url = text.urljoin(self.root, fmts[fmt])

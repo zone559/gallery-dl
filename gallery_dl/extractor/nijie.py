@@ -9,7 +9,7 @@
 """Extractors for nijie instances"""
 
 from .common import BaseExtractor, Message, Dispatch, AsynchronousMixin
-from .. import text, exception
+from .. import text, dt, exception
 from ..cache import cache
 
 
@@ -59,7 +59,7 @@ class NijieExtractor(AsynchronousMixin, BaseExtractor):
             urls = self._extract_images(image_id, page)
             data["count"] = len(urls)
 
-            yield Message.Directory, data
+            yield Message.Directory, "", data
             for num, url in enumerate(urls):
                 image = text.nameext_from_url(url, {
                     "num": num,
@@ -82,8 +82,9 @@ class NijieExtractor(AsynchronousMixin, BaseExtractor):
             "title"      : keywords[0].strip(),
             "description": text.unescape(extr(
                 '"description": "', '"').replace("&amp;", "&")),
-            "date"       : text.parse_datetime(extr(
-                '"datePublished": "', '"'), "%a %b %d %H:%M:%S %Y", 9),
+            "date"       : dt.parse(extr(
+                '"datePublished": "', '"'), "%a %b %d %H:%M:%S %Y"
+            ) - dt.timedelta(hours=9),
             "artist_id"  : text.parse_int(extr('/members.php?id=', '"')),
             "artist_name": keywords[1],
             "tags"       : keywords[2:-1],
@@ -101,9 +102,9 @@ class NijieExtractor(AsynchronousMixin, BaseExtractor):
             "artist_id"  : text.parse_int(extr('members.php?id=', '"')),
             "artist_name": keywords[1],
             "tags"       : keywords[2:-1],
-            "date"       : text.parse_datetime(extr(
-                "itemprop='datePublished' content=", "<").rpartition(">")[2],
-                "%Y-%m-%d %H:%M:%S", 9),
+            "date"       : dt.parse_iso(extr(
+                "itemprop='datePublished' content=", "<").rpartition(">")[2]
+            ) - dt.timedelta(hours=9),
         }
 
     def _extract_images(self, image_id, page):
@@ -139,7 +140,7 @@ class NijieExtractor(AsynchronousMixin, BaseExtractor):
     def _login_impl(self, username, password):
         self.log.info("Logging in as %s", username)
 
-        url = f"{self.root}/login_int.php"
+        url = self.root + "/login_int.php"
         data = {"email": username, "password": password, "save": "on"}
 
         response = self.request(url, method="POST", data=data)

@@ -32,9 +32,8 @@ class KabeuchiUserExtractor(Extractor):
             if post.get("is_ad") or not post["image1"]:
                 continue
 
-            post["date"] = text.parse_datetime(
-                post["created_at"], "%Y-%m-%d %H:%M:%S")
-            yield Message.Directory, post
+            post["date"] = self.parse_datetime_iso(post["created_at"])
+            yield Message.Directory, "", post
 
             for key in keys:
                 name = post[key]
@@ -53,7 +52,7 @@ class KabeuchiUserExtractor(Extractor):
         return self._pagination(target_id)
 
     def _pagination(self, target_id):
-        url = f"{self.root}/get_posts.php"
+        url = self.root + "/get_posts.php"
         data = {
             "user_id"    : "0",
             "target_id"  : target_id,

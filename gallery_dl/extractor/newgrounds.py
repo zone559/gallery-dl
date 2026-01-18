@@ -9,7 +9,7 @@
 """Extractors for https://www.newgrounds.com/"""
 
 from .common import Extractor, Message, Dispatch
-from .. import text, util, exception
+from .. import text, util, dt, exception
 from ..cache import cache
 import itertools
 
@@ -34,7 +34,7 @@ class NewgroundsExtractor(Extractor):
         self.user_root = f"https://{self.user}.newgrounds.com"
 
     def _init(self):
-        self._extract_comment_urls = util.re(
+        self._extract_comment_urls = text.re(
             r'(?:<img |data-smartload-)src="([^"]+)').findall
         self.flash = self.config("flash", True)
 
@@ -58,13 +58,13 @@ class NewgroundsExtractor(Extractor):
                 post = self.extract_post(post_url)
                 url = post.get("url")
             except Exception as exc:
-                self.log.debug("", exc_info=exc)
+                self.log.traceback(exc)
                 url = None
 
             if url:
                 if metadata:
                     post.update(metadata)
-                yield Message.Directory, post
+                yield Message.Directory, "", post
                 post["num"] = 0
                 yield Message.Url, url, text.nameext_from_url(url, post)
 
@@ -88,6 +88,7 @@ class NewgroundsExtractor(Extractor):
                     text.nameext_from_url(url, post)
                     yield Message.Url, url, post
             else:
+                self.status |= 1
                 self.log.warning(
                     "Unable to get download URL for '%s'", post_url)
 
@@ -218,7 +219,7 @@ class NewgroundsExtractor(Extractor):
             "description": text.unescape(extr(':description" content="', '"')),
             "type"       : "art",
             "_type"      : "i",
-            "date"       : text.parse_datetime(extr(
+            "date"       : dt.parse_iso(extr(
                 'itemprop="datePublished" content="', '"')),
             "rating"     : extr('class="rated-', '"'),
             "url"        : full('src="', '"'),
@@ -268,7 +269,7 @@ class NewgroundsExtractor(Extractor):
             "description": text.unescape(extr(':description" content="', '"')),
             "type"       : "audio",
             "_type"      : "a",
-            "date"       : text.parse_datetime(extr(
+            "date"       : dt.parse_iso(extr(
                 'itemprop="datePublished" content="', '"')),
             "url"        : extr('{"url":"', '"').replace("\\/", "/"),
             "index"      : text.parse_int(index),
@@ -287,7 +288,7 @@ class NewgroundsExtractor(Extractor):
             src = src.replace("\\/", "/")
             formats = ()
             type = extr(',"description":"', '"')
-            date = text.parse_datetime(extr(
+            date = dt.parse_iso(extr(
                 'itemprop="datePublished" content="', '"'))
             if type:
                 type = type.rpartition(" ")[2].lower()
@@ -302,7 +303,7 @@ class NewgroundsExtractor(Extractor):
             sources = self.request_json(url, headers=headers)["sources"]
             formats = self._video_formats(sources)
             src = next(formats, "")
-            date = text.parse_timestamp(src.rpartition("?")[2])
+            date = self.parse_timestamp(src.rpartition("?")[2])
             type = "movie"
 
         return {
@@ -321,7 +322,7 @@ class NewgroundsExtractor(Extractor):
 
     def _video_formats(self, sources):
         src = sources["360p"][0]["src"]
-        sub = util.re(r"\.360p\.\w+").sub
+        sub = text.re(r"\.360p\.\w+").sub
 
         for fmt in self.format:
             try:
@@ -509,7 +510,7 @@ class NewgroundsFavoriteExtractor(NewgroundsExtractor):
     def _extract_favorites(self, page):
         return [
             self.root + path
-            for path in text.extract_iter(page, f'href="{self.root}', '"')
+            for path in text.extract_iter(page, 'href="' + self.root, '"')
         ]
 
 
@@ -518,7 +519,6 @@ class NewgroundsFollowingExtractor(NewgroundsFavoriteExtractor):
     subcategory = "following"
     pattern = (USER_PATTERN + r"/favorites/(following)"
                r"(?:(?:/page/|/?\?page=)(\d+))?")
-
     example = "https://USER.newgrounds.com/favorites/following"
 
     def items(self):

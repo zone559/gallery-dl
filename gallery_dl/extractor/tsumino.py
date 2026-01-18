@@ -30,7 +30,7 @@ class TsuminoBase():
     @cache(maxage=14*86400, keyarg=1)
     def _login_impl(self, username, password):
         self.log.info("Logging in as %s", username)
-        url = f"{self.root}/Account/Login"
+        url = self.root + "/Account/Login"
         headers = {"Referer": url}
         data = {"Username": username, "Password": password}
 
@@ -65,7 +65,7 @@ class TsuminoGalleryExtractor(TsuminoBase, GalleryExtractor):
             "title_jp"  : title_jp,
             "thumbnail" : extr('"og:image" content="', '"'),
             "uploader"  : text.remove_html(extr('id="Uploader">', '</div>')),
-            "date"      : text.parse_datetime(
+            "date"      : self.parse_datetime(
                 extr('id="Uploaded">', '</div>').strip(), "%Y %B %d"),
             "rating"    : text.parse_float(extr(
                 'id="Rating">', '</div>').partition(" ")[0]),
@@ -119,9 +119,9 @@ class TsuminoSearchExtractor(TsuminoBase, Extractor):
 
     def galleries(self):
         """Return all gallery results matching 'self.query'"""
-        url = f"{self.root}/Search/Operate?type=Book"
+        url = self.root + "/Search/Operate?type=Book"
         headers = {
-            "Referer": f"{self.root}/",
+            "Referer": self.root + "/",
             "X-Requested-With": "XMLHttpRequest",
         }
         data = {

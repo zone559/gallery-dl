@@ -48,7 +48,7 @@ class FantiaExtractor(Extractor):
 
             for content in contents:
                 files = self._process_content(post, content)
-                yield Message.Directory, post
+                yield Message.Directory, "", post
 
                 if content["visible_status"] != "visible":
                     self.log.warning(
@@ -101,7 +101,7 @@ class FantiaExtractor(Extractor):
             "comment": resp["comment"],
             "rating": resp["rating"],
             "posted_at": resp["posted_at"],
-            "date": text.parse_datetime(
+            "date": self.parse_datetime(
                 resp["posted_at"], "%a, %d %b %Y %H:%M:%S %z"),
             "fanclub_id": resp["fanclub"]["id"],
             "fanclub_user_id": resp["fanclub"]["user"]["id"],

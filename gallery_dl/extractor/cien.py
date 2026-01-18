@@ -34,7 +34,7 @@ class CienExtractor(Extractor):
             page = self.request(url, params=params).text
 
             for card in text.extract_iter(
-                    page, ' class="c-cardCase-item', '</div>'):
+                    page, ' class="c-cardCase-item', '</figure>'):
                 article_url = text.extr(card, ' href="', '"')
                 yield Message.Queue, article_url, data
 
@@ -61,7 +61,7 @@ class CienArticleExtractor(CienExtractor):
         post["post_url"] = url
         post["post_id"] = text.parse_int(post_id)
         post["count"] = len(files)
-        post["date"] = text.parse_datetime(post["datePublished"])
+        post["date"] = self.parse_datetime_iso(post["datePublished"])
 
         try:
             post["author"]["id"] = text.parse_int(author_id)
@@ -70,7 +70,7 @@ class CienArticleExtractor(CienExtractor):
         except Exception:
             pass
 
-        yield Message.Directory, post
+        yield Message.Directory, "", post
         for post["num"], file in enumerate(files, 1):
             post.update(file)
             if "extension" not in file:

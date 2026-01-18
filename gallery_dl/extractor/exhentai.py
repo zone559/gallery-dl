@@ -150,11 +150,10 @@ class ExhentaiGalleryExtractor(ExhentaiExtractor):
         self.original = self.config("original", True)
 
     def finalize(self):
-        if self.data:
+        if self.data and (token := self.data.get("image_token")):
             self.log.info("Use '%s/s/%s/%s-%s' as input URL "
                           "to continue downloading from the current position",
-                          self.root, self.data["image_token"],
-                          self.gallery_id, self.data["num"])
+                          self.root, token, self.gallery_id, self.data["num"])
 
     def favorite(self, slot="0"):
         url = self.root + "/gallerypopups.php"
@@ -193,7 +192,7 @@ class ExhentaiGalleryExtractor(ExhentaiExtractor):
 
         self.data = data = self.get_metadata(gpage)
         self.count = text.parse_int(data["filecount"])
-        yield Message.Directory, data
+        yield Message.Directory, "", data
 
         images = itertools.chain(
             (self.image_from_page(ipage),), self.images_from_api())
@@ -216,7 +215,7 @@ class ExhentaiGalleryExtractor(ExhentaiExtractor):
     def _items_hitomi(self):
         if self.config("metadata", False):
             data = self.metadata_from_api()
-            data["date"] = text.parse_timestamp(data["posted"])
+            data["date"] = self.parse_timestamp(data["posted"])
         else:
             data = {}
 
@@ -226,14 +225,14 @@ class ExhentaiGalleryExtractor(ExhentaiExtractor):
         yield Message.Queue, url, data
 
     def _items_metadata(self):
-        yield Message.Directory, self.metadata_from_api()
+        yield Message.Directory, "", self.metadata_from_api()
 
     def get_metadata(self, page):
         """Extract gallery metadata"""
         data = self.metadata_from_page(page)
         if self.config("metadata", False):
             data.update(self.metadata_from_api())
-            data["date"] = text.parse_timestamp(data["posted"])
+            data["date"] = self.parse_timestamp(data["posted"])
         if self.config("tags", False):
             tags = collections.defaultdict(list)
             for tag in data["tags"]:
@@ -258,8 +257,8 @@ class ExhentaiGalleryExtractor(ExhentaiExtractor):
             "_"            : extr('<div id="gdc"><div class="cs ct', '"'),
             "eh_category"  : extr('>', '<'),
             "uploader"     : extr('<div id="gdn">', '</div>'),
-            "date"         : text.parse_datetime(extr(
-                '>Posted:</td><td class="gdt2">', '</td>'), "%Y-%m-%d %H:%M"),
+            "date"         : self.parse_datetime_iso(extr(
+                '>Posted:</td><td class="gdt2">', '</td>')),
             "parent"       : extr(
                 '>Parent:</td><td class="gdt2"><a href="', '"'),
             "expunged"     : "Yes" != extr(

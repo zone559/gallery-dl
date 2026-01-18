@@ -42,7 +42,7 @@ class LolisafeAlbumExtractor(LolisafeExtractor):
     def items(self):
         files, data = self.fetch_album(self.album_id)
 
-        yield Message.Directory, data
+        yield Message.Directory, "", data
         for data["num"], file in enumerate(files, 1):
             url = file["file"]
             file.update(data)
@@ -60,10 +60,11 @@ class LolisafeAlbumExtractor(LolisafeExtractor):
                     file["filename"] = file["name"]
                 else:
                     file["id"] = fid
-                    file["filename"] = file["name"] + "-" + fid
+                    file["filename"] = f"{file['name']}-{fid}"
             elif "id" in file:
                 file["name"] = file["filename"]
-                file["filename"] = f"{file['name']}-{file['id']}"
+                if file["filename"] != file["id"]:
+                    file["filename"] = f"{file['name']}-{file['id']}"
             else:
                 file["name"], sep, file["id"] = \
                     file["filename"].rpartition("-")

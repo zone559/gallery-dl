@@ -5,7 +5,7 @@
 # published by the Free Software Foundation.
 
 from .common import Extractor, Message
-from .. import text, util, exception
+from .. import text, exception
 from ..cache import cache
 
 BASE_PATTERN = r"(?:https?://)?(?:www\.)?girlswithmuscle\.com"
@@ -80,7 +80,7 @@ class GirlswithmusclePostExtractor(GirlswithmuscleExtractor):
             metadata["type"] = "video"
 
         text.nameext_from_url(url, metadata)
-        yield Message.Directory, metadata
+        yield Message.Directory, "", metadata
         yield Message.Url, url, metadata
 
     def metadata(self, page):
@@ -101,9 +101,8 @@ class GirlswithmusclePostExtractor(GirlswithmuscleExtractor):
             "model": model,
             "model_list": self._parse_model_list(model),
             "tags": text.split_html(tags)[1::2],
-            "date": text.parse_datetime(
-                text.extr(page, 'class="hover-time"  title="', '"')[:19],
-                "%Y-%m-%d %H:%M:%S"),
+            "date": self.parse_datetime_iso(text.extr(
+                page, 'class="hover-time"  title="', '"')[:19]),
             "is_favorite": self._parse_is_favorite(page),
             "source_filename": source,
             "uploader": uploader,
@@ -156,7 +155,7 @@ class GirlswithmuscleSearchExtractor(GirlswithmuscleExtractor):
             raise exception.AuthorizationError(msg)
         page = response.text
 
-        match = util.re(r"Page (\d+) of (\d+)").search(page)
+        match = text.re(r"Page (\d+) of (\d+)").search(page)
         current, total = match.groups()
         current, total = text.parse_int(current), text.parse_int(total)
 

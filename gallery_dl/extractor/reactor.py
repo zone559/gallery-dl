@@ -38,7 +38,7 @@ class ReactorExtractor(BaseExtractor):
 
     def items(self):
         data = self.metadata()
-        yield Message.Directory, data
+        yield Message.Directory, "", data
         for post in self.posts():
             for image in self._parse_post(post):
                 url = image["url"]
@@ -97,7 +97,7 @@ class ReactorExtractor(BaseExtractor):
                 return
 
         num = 0
-        date = text.parse_datetime(data["datePublished"])
+        date = self.parse_datetime_iso(data["datePublished"])
         user = data["author"]["name"]
         description = text.unescape(data["description"])
         title, _, tags = text.unescape(data["headline"]).partition(" / ")
@@ -228,6 +228,6 @@ class ReactorPostExtractor(ReactorExtractor):
         pos = post.find('class="uhead">')
         for image in self._parse_post(post[pos:]):
             if image["num"] == 1:
-                yield Message.Directory, image
+                yield Message.Directory, "", image
             url = image["url"]
             yield Message.Url, url, text.nameext_from_url(url, image)

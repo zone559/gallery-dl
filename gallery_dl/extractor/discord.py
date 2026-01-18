@@ -9,7 +9,6 @@
 from .common import Extractor, Message
 from .. import text, exception
 
-
 BASE_PATTERN = r"(?:https?://)?discord\.com"
 
 
@@ -19,7 +18,7 @@ class DiscordExtractor(Extractor):
     root = "https://discord.com"
     directory_fmt = ("{category}", "{server_id}_{server}",
                      "{channel_id}_{channel}")
-    filename_fmt = "{message_id}_{num:>02}_{filename}.{extension}"
+    filename_fmt = "{message_id}_{num:>02}_{filename[:220]}.{extension}"
     archive_fmt = "{message_id}_{num}"
 
     server_metadata = {}
@@ -72,9 +71,7 @@ class DiscordExtractor(Extractor):
                 "author_files": [],
                 "message": self.extract_message_text(message),
                 "message_id": message["id"],
-                "date": text.parse_datetime(
-                    message["timestamp"], "%Y-%m-%dT%H:%M:%S.%f%z"
-                ),
+                "date": self.parse_datetime_iso(message["timestamp"]),
                 "files": []
             })
 
@@ -122,7 +119,7 @@ class DiscordExtractor(Extractor):
                     text.nameext_from_url(file["url"], file)
                     file["num"] = num
 
-                yield Message.Directory, message_metadata
+                yield Message.Directory, "", message_metadata
 
                 for file in message_metadata["files"]:
                     message_metadata_file = message_metadata.copy()
@@ -205,28 +202,46 @@ class DiscordExtractor(Extractor):
 
     def parse_server(self, server):
         self.server_metadata = {
-            "server": server["name"],
+            "server"   : server["name"],
             "server_id": server["id"],
-            "server_files": [],
-            "owner_id": server["owner_id"]
+            "owner_id" : server["owner_id"],
+            "server_files": self.collect_server_assets(server),
         }
 
-        for icon_type, icon_path in (
-            ("icon", "icons"),
-            ("banner", "banners"),
-            ("splash", "splashes"),
-            ("discovery_splash", "discovery-splashes")
-        ):
-            if server.get(icon_type):
-                self.server_metadata["server_files"].append({
-                    "url": (f"https://cdn.discordapp.com/{icon_path}/"
-                            f"{self.server_metadata['server_id']}/"
-                            f"{server[icon_type]}.png?size=4096"),
-                    "filename": icon_type,
-                    "extension": "png",
-                })
-
         return self.server_metadata
+
+    def collect_server_assets(self, server, asset_type=None):
+        if asset_type and asset_type != "general":
+            return [
+                {
+                    **asset,
+                    "url": (f"https://cdn.discordapp.com/{asset_type}/"
+                            f"{asset['id']}.png?size=4096"),
+                    "label"    : asset_type,
+                    "filename" : f"{asset['name']} ({asset['id']})",
+                    "extension": "png",
+                }
+                for asset in assets
+            ] if (assets := server.get(asset_type)) else ()
+        else:
+            return [
+                {
+                    "url": (f"https://cdn.discordapp.com/{asset_path}/"
+                            f"{server['id']}/{asset_id}.png?size=4096"),
+                    "id"       : f"{server['id']}/{asset_id}",
+                    "label"    : "",
+                    "name"     : asset_type,
+                    "filename" : asset_type,
+                    "extension": "png",
+                }
+                for asset_type, asset_path in (
+                    ("icon"  , "icons"),
+                    ("banner", "banners"),
+                    ("splash", "splashes"),
+                    ("discovery_splash", "discovery-splashes")
+                )
+                if (asset_id := server.get(asset_type))
+            ]
 
     def build_server_and_channels(self, server_id):
         self.parse_server(self.api.get_server(server_id))
@@ -266,6 +281,35 @@ class DiscordMessageExtractor(DiscordExtractor):
 
         return self.extract_message(
             self.api.get_message(channel_id, message_id))
+
+
+class DiscordServerAssetsExtractor(DiscordExtractor):
+    subcategory = "server-assets"
+    filename_fmt = "{name} ({id}).{extension}"
+    directory_fmt = ["{category}", "{server_id}_{server}", "Assets", "{label}"]
+    archive_fmt = "asset_{server_id}_{id}"
+    pattern = (BASE_PATTERN +
+               r"/channels/(\d+)/(?:assets?|files)(?:/([\w-]+))?/?$")
+    example = "https://discord.com/channels/1234567890/assets"
+
+    def items(self):
+        server_id, asset_type = self.groups
+        server = self.api.get_server(server_id)
+        parsed = self.parse_server(server)
+
+        if asset_type is None:
+            asset_types = ("", "emojis", "stickers")
+        else:
+            asset_types = asset_type.split(",")
+
+        for asset_type in asset_types:
+            assets = self.collect_server_assets(server, asset_type)
+            parsed["count"] = len(assets)
+            parsed["label"] = asset_type
+            yield Message.Directory, "", parsed
+            for asset in assets:
+                asset.update(parsed)
+                yield Message.Url, asset["url"], asset
 
 
 class DiscordServerExtractor(DiscordExtractor):

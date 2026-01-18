@@ -23,7 +23,7 @@ class MangaparkBase():
     category = "mangapark"
 
     def _parse_chapter_title(self, title):
-        match = util.re(
+        match = text.re(
             r"(?i)"
             r"(?:vol(?:\.|ume)?\s*(\d+)\s*)?"
             r"ch(?:\.|apter)?\s*(\d+)([^\s:]*)"
@@ -101,7 +101,7 @@ class MangaparkChapterExtractor(MangaparkBase, ChapterExtractor):
             "language"  : util.code_to_language(lang),
             "source"    : chapter["srcTitle"],
             "source_id" : chapter["sourceId"],
-            "date"      : text.parse_timestamp(chapter["dateCreate"] // 1000),
+            "date"      : self.parse_timestamp(chapter["dateCreate"] / 1000),
         }
 
     def images(self, _):
@@ -138,8 +138,8 @@ class MangaparkMangaExtractor(MangaparkBase, Extractor):
                 "language"  : util.code_to_language(lang),
                 "source"    : chapter["srcTitle"],
                 "source_id" : chapter["sourceId"],
-                "date"      : text.parse_timestamp(
-                    chapter["dateCreate"] // 1000),
+                "date"      : self.parse_timestamp(
+                    chapter["dateCreate"] / 1000),
                 "_extractor": MangaparkChapterExtractor,
             }
             yield Message.Queue, url, data

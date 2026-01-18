@@ -35,8 +35,7 @@ class PexelsExtractor(Extractor):
                 post["type"] = attr["type"]
 
             post.update(metadata)
-            post["date"] = text.parse_datetime(
-                post["created_at"][:-5], "%Y-%m-%dT%H:%M:%S")
+            post["date"] = self.parse_datetime_iso(post["created_at"][:-5])
 
             if "image" in post:
                 url, _, query = post["image"]["download_link"].partition("?")
@@ -49,7 +48,7 @@ class PexelsExtractor(Extractor):
                 self.log.warning("%s: Unsupported post type", post.get("id"))
                 continue
 
-            yield Message.Directory, post
+            yield Message.Directory, "", post
             yield Message.Url, url, text.nameext_from_url(name, post)
 
     def posts(self):

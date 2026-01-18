@@ -26,14 +26,13 @@ class PiczelExtractor(Extractor):
     def items(self):
         for post in self.posts():
             post["tags"] = [t["title"] for t in post["tags"] if t["title"]]
-            post["date"] = text.parse_datetime(
-                post["created_at"], "%Y-%m-%dT%H:%M:%S.%f%z")
+            post["date"] = self.parse_datetime_iso(post["created_at"])
 
             if post["multi"]:
                 images = post["images"]
                 del post["images"]
                 post["count"] = len(images)
-                yield Message.Directory, post
+                yield Message.Directory, "", post
                 for post["num"], image in enumerate(images):
                     if "id" in image:
                         del image["id"]
@@ -43,7 +42,7 @@ class PiczelExtractor(Extractor):
 
             else:
                 post["count"] = 1
-                yield Message.Directory, post
+                yield Message.Directory, "", post
                 post["num"] = 0
                 url = post["image"]["url"]
                 yield Message.Url, url, text.nameext_from_url(url, post)

@@ -22,6 +22,10 @@ else:
     from shlex import quote
 
 
+def trim(args):
+    return (args.partition(" ") if isinstance(args, str) else args)[0]
+
+
 class ExecPP(PostProcessor):
 
     def __init__(self, job, options):
@@ -35,6 +39,7 @@ class ExecPP(PostProcessor):
             if options.get("async", False):
                 self._exec = self._popen
 
+        self.verbose = options.get("verbose", True)
         self.session = False
         self.creationflags = 0
         if options.get("session"):
@@ -50,11 +55,13 @@ class ExecPP(PostProcessor):
             events = events.split(",")
         job.register_hooks({event: execute for event in events}, options)
 
-        self._init_archive(job, options)
+        if self._archive_init(job, options):
+            self._archive_register(job)
 
     def _prepare_cmd(self, cmd):
         if isinstance(cmd, str):
-            self._sub = util.re(r"\{(_directory|_filename|_path|)\}").sub
+            self._sub = util.re(
+                r"\{(_directory|_filename|_(?:temp)?path|)\}").sub
             return self.exec_string, cmd
         else:
             return self.exec_list, [formatter.parse(arg) for arg in cmd]
@@ -68,6 +75,7 @@ class ExecPP(PostProcessor):
 
         kwdict["_directory"] = pathfmt.realdirectory
         kwdict["_filename"] = pathfmt.filename
+        kwdict["_temppath"] = pathfmt.temppath
         kwdict["_path"] = pathfmt.realpath
 
         args = [arg.format_map(kwdict) for arg in self.args]
@@ -112,11 +120,11 @@ class ExecPP(PostProcessor):
     def _exec(self, args, shell):
         if retcode := self._popen(args, shell).wait():
             self.log.warning("'%s' returned with non-zero exit status (%d)",
-                             args, retcode)
+                             args if self.verbose else trim(args), retcode)
         return retcode
 
     def _popen(self, args, shell):
-        self.log.debug("Running '%s'", args)
+        self.log.debug("Running '%s'", args if self.verbose else trim(args))
         return util.Popen(
             args,
             shell=shell,
@@ -130,6 +138,8 @@ class ExecPP(PostProcessor):
             return quote(self.pathfmt.realdirectory)
         if name == "_filename":
             return quote(self.pathfmt.filename)
+        if name == "_temppath":
+            return quote(self.pathfmt.temppath)
         return quote(self.pathfmt.realpath)
 
 

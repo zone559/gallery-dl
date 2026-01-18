@@ -9,9 +9,8 @@
 """Extractors for https://motherless.com/"""
 
 from .common import Extractor, Message
-from .. import text, util, exception
+from .. import text, dt, exception
 from ..cache import memcache
-from datetime import timedelta
 
 BASE_PATTERN = r"(?:https?://)?motherless\.com"
 
@@ -42,6 +41,8 @@ class MotherlessExtractor(Extractor):
         path, _, media_id = path.rpartition("/")
         data = {
             "id"   : media_id,
+            "title": text.unescape(
+                (t := extr("<title>", "<")) and t[:t.rfind(" | ")]),
             "type" : extr("__mediatype = '", "'"),
             "group": extr("__group = '", "'"),
             "url"  : extr("__fileurl = '", "'"),
@@ -50,7 +51,6 @@ class MotherlessExtractor(Extractor):
                 for tag in text.extract_iter(
                     extr('class="media-meta-tags">', "</div>"), ">#", "<")
             ],
-            "title": text.unescape(extr("<h1>", "<")),
             "views": text.parse_int(extr(
                 'class="count">', " ").replace(",", "")),
             "favorites": text.parse_int(extr(
@@ -91,12 +91,14 @@ class MotherlessExtractor(Extractor):
             title = self._extract_gallery_title(page, gid)
         else:
             title = self._extract_group_title(page, gid)
+        creator = text.remove_html(extr(
+            f'class="{category}-member-username">', "</"))
 
         return {
-            f"{category}_id": gid,
-            f"{category}_title": title,
-            "uploader": text.remove_html(extr(
-                f'class="{category}-member-username">', "</")),
+            category + "_id": gid,
+            category + "_title": title,
+            category + "_creator": creator,
+            "uploader": creator,
             "count": text.parse_int(
                 extr('<span class="active">', ")")
                 .rpartition("(")[2].replace(",", "")),
@@ -115,14 +117,14 @@ class MotherlessExtractor(Extractor):
 
         return data
 
-    def _parse_datetime(self, dt):
-        if " ago" not in dt:
-            return text.parse_datetime(dt, "%d  %b  %Y")
+    def _parse_datetime(self, dt_string):
+        if " ago" not in dt_string:
+            return dt.parse(dt_string, "%d  %b  %Y")
 
-        value = text.parse_int(dt[:-5])
-        delta = timedelta(0, value*3600) if dt[-5] == "h" else timedelta(value)
-        return (util.datetime_utcnow() - delta).replace(
-            hour=0, minute=0, second=0)
+        value = text.parse_int(dt_string[:-5])
+        delta = (dt.timedelta(0, value*3600) if dt_string[-5] == "h" else
+                 dt.timedelta(value))
+        return (dt.now() - delta).replace(hour=0, minute=0, second=0)
 
     @memcache(keyarg=2)
     def _extract_gallery_title(self, page, gallery_id):
@@ -132,10 +134,9 @@ class MotherlessExtractor(Extractor):
         if title:
             return text.unescape(title.strip())
 
-        pos = page.find(f' href="/G{gallery_id}"')
-        if pos >= 0:
-            return text.unescape(text.extract(
-                page, ' title="', '"', pos)[0])
+        if f' href="/G{gallery_id}"' in page:
+            return text.unescape(
+                (t := text.extr(page, "<title>", "<")) and t[:t.rfind(" | ")])
 
         return ""
 
@@ -161,7 +162,7 @@ class MotherlessMediaExtractor(MotherlessExtractor):
     def items(self):
         file = self._extract_media(self.groups[0])
         url = file["url"]
-        yield Message.Directory, file
+        yield Message.Directory, "", file
         yield Message.Url, url, text.nameext_from_url(url, file)
 
 
@@ -191,14 +192,15 @@ class MotherlessGalleryExtractor(MotherlessExtractor):
             file = self._parse_thumb_data(thumb)
             thumbnail = file["thumbnail"]
 
-            if file["type"] == "video":
-                file = self._extract_media(file["id"])
+            file = self._extract_media(file["id"])
 
+            uploader = file.get("uploader")
             file.update(data)
             file["num"] = num
             file["thumbnail"] = thumbnail
+            file["uploader"] = uploader
             url = file["url"]
-            yield Message.Directory, file
+            yield Message.Directory, "", file
             yield Message.Url, url, text.nameext_from_url(url, file)
 
 
@@ -236,5 +238,5 @@ class MotherlessGroupExtractor(MotherlessExtractor):
             file["uploader"] = uploader
             file["group"] = file["group_id"]
             url = file["url"]
-            yield Message.Directory, file
+            yield Message.Directory, "", file
             yield Message.Url, url, text.nameext_from_url(url, file)

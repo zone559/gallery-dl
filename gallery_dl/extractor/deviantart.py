@@ -9,7 +9,7 @@
 """Extractors for https://www.deviantart.com/"""
 
 from .common import Extractor, Message, Dispatch
-from .. import text, util, exception
+from .. import text, util, dt, exception
 from ..cache import cache, memcache
 import collections
 import mimetypes
@@ -64,13 +64,13 @@ class DeviantartExtractor(Extractor):
         if self.quality:
             if self.quality == "png":
                 self.quality = "-fullview.png?"
-                self.quality_sub = util.re(r"-fullview\.[a-z0-9]+\?").sub
+                self.quality_sub = text.re(r"-fullview\.[a-z0-9]+\?").sub
             else:
-                self.quality = f",q_{self.quality}"
-                self.quality_sub = util.re(r",q_\d+").sub
+                self.quality = ",q_" + str(self.quality)
+                self.quality_sub = text.re(r",q_\d+").sub
 
         if self.intermediary:
-            self.intermediary_subn = util.re(r"(/f/[^/]+/[^/]+)/v\d+/.*").subn
+            self.intermediary_subn = text.re(r"(/f/[^/]+/[^/]+)/v\d+/.*").subn
 
         if isinstance(self.original, str) and \
                 self.original.lower().startswith("image"):
@@ -154,7 +154,7 @@ class DeviantartExtractor(Extractor):
                 deviation.update(data)
 
             self.prepare(deviation)
-            yield Message.Directory, deviation
+            yield Message.Directory, "", deviation
 
             if "content" in deviation:
                 content = self._extract_content(deviation)
@@ -259,7 +259,7 @@ class DeviantartExtractor(Extractor):
 
         deviation["published_time"] = text.parse_int(
             deviation["published_time"])
-        deviation["date"] = text.parse_timestamp(
+        deviation["date"] = self.parse_timestamp(
             deviation["published_time"])
 
         if self.comments:
@@ -269,7 +269,7 @@ class DeviantartExtractor(Extractor):
             )
 
         # filename metadata
-        sub = util.re(r"\W").sub
+        sub = text.re(r"\W").sub
         deviation["filename"] = "".join((
             sub("_", deviation["title"].lower()), "_by_",
             sub("_", deviation["author"]["username"].lower()), "-d",
@@ -404,7 +404,7 @@ class DeviantartExtractor(Extractor):
             try:
                 return self._tiptap_to_html(markup)
             except Exception as exc:
-                self.log.debug("", exc_info=exc)
+                self.log.traceback(exc)
                 self.log.error("%s: '%s: %s'", deviation["index"],
                                exc.__class__.__name__, exc)
 
@@ -675,7 +675,7 @@ x2="45.4107524%" y2="71.4898596%" id="app-root-3">\
 
     def _find_folder(self, folders, name, uuid):
         if uuid.isdecimal():
-            match = util.re(
+            match = text.re(
                 "(?i)" + name.replace("-", "[^a-z0-9]+") + "$").match
             for folder in folders:
                 if match(folder["name"]):
@@ -888,7 +888,7 @@ class DeviantartGalleryExtractor(DeviantartExtractor):
     subcategory = "gallery"
     archive_fmt = "g_{_username}_{index}.{extension}"
     pattern = (BASE_PATTERN + r"/gallery"
-               r"(?:/all|/recommended-for-you|/?\?catpath=)?/?$")
+               r"(?:/all|/recommended-for-you)?/?(\?(?!q=).*)?$")
     example = "https://www.deviantart.com/USER/gallery/"
 
     def deviations(self):
@@ -1074,6 +1074,8 @@ class DeviantartStashExtractor(DeviantartExtractor):
                 return
 
         if stash_data := text.extr(page, ',\\"stash\\":', ',\\"@@'):
+            if stash_data.endswith(":{}"):
+                stash_data = stash_data[:stash_data.rfind("}", None, -2)+1]
             stash_data = util.json_loads(self._unescape_json(stash_data))
 
         for sid in text.extract_iter(
@@ -1187,8 +1189,8 @@ class DeviantartStatusExtractor(DeviantartExtractor):
             deviation["username"] = deviation["author"]["username"]
             deviation["_username"] = deviation["username"].lower()
 
-        deviation["date"] = dt = text.parse_datetime(deviation["ts"])
-        deviation["published_time"] = int(util.datetime_to_timestamp(dt))
+        deviation["date"] = d = self.parse_datetime_iso(deviation["ts"])
+        deviation["published_time"] = int(dt.to_ts(d))
 
         deviation["da_category"] = "Status"
         deviation["category_path"] = "status"

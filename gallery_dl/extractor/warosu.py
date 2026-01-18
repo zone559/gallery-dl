@@ -37,12 +37,12 @@ class WarosuThreadExtractor(Extractor):
             data["title"] = text.unescape(text.remove_html(
                 posts[0]["com"]))[:50]
 
-        yield Message.Directory, data
+        yield Message.Directory, "", data
         for post in posts:
             if "image" in post:
                 for key in ("w", "h", "no", "time", "tim"):
                     post[key] = text.parse_int(post[key])
-                dt = text.parse_timestamp(post["time"])
+                dt = self.parse_timestamp(post["time"])
                 # avoid zero-padding 'day' with %d
                 post["now"] = dt.strftime(f"%a, %b {dt.day}, %Y %H:%M:%S")
                 post.update(data)

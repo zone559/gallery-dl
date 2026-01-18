@@ -47,7 +47,7 @@ class ArtstationExtractor(Extractor):
                 asset.update(data)
                 adict = asset["asset"]
                 asset["num"] = num
-                yield Message.Directory, asset
+                yield Message.Directory, "", asset
 
                 if adict["has_embedded_player"]:
                     if url := self._extract_embed(asset):
@@ -95,7 +95,7 @@ class ArtstationExtractor(Extractor):
             if not self.external:
                 return
             asset["extension"] = "mp4"
-            return f"ytdl:{url}"
+            return "ytdl:" + url
 
         self.log.debug(player)
         self.log.warning("Failed to extract embedded player URL (%s)",
@@ -126,8 +126,7 @@ class ArtstationExtractor(Extractor):
         data["title"] = text.unescape(data["title"])
         data["description"] = text.unescape(text.remove_html(
             data["description"]))
-        data["date"] = text.parse_datetime(
-            data["created_at"], "%Y-%m-%dT%H:%M:%S.%f%z")
+        data["date"] = self.parse_datetime_iso(data["created_at"])
 
         assets = data["assets"]
         del data["assets"]
@@ -329,12 +328,12 @@ class ArtstationChallengeExtractor(ArtstationExtractor):
 
     def items(self):
         base = f"{self.root}/contests/_/challenges/{self.challenge_id}"
-        challenge_url = f"{base}.json"
-        submission_url = f"{base}/submissions.json"
-        update_url = f"{self.root}/contests/submission_updates.json"
+        challenge_url = base + ".json"
+        submission_url = base + "/submissions.json"
+        update_url = self.root + "/contests/submission_updates.json"
 
         challenge = self.request_json(challenge_url)
-        yield Message.Directory, {"challenge": challenge}
+        yield Message.Directory, "", {"challenge": challenge}
 
         params = {"sorting": self.sorting}
         for submission in self._pagination(submission_url, params):
@@ -389,7 +388,7 @@ class ArtstationSearchExtractor(ArtstationExtractor):
                     "value" : value.split(","),
                 })
 
-        url = f"{self.root}/api/v2/search/projects.json"
+        url = self.root + "/api/v2/search/projects.json"
         data = {
             "query"            : self.query,
             "page"             : None,
@@ -420,7 +419,7 @@ class ArtstationArtworkExtractor(ArtstationExtractor):
         return {"artwork": self.query}
 
     def projects(self):
-        url = f"{self.root}/projects.json"
+        url = self.root + "/projects.json"
         return self._pagination(url, self.query.copy())
 
 

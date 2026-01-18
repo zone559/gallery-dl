@@ -93,8 +93,12 @@ class YoutubeDLExtractor(Extractor):
                 self.ytdl_url,
                 ytdl_instance.get_info_extractor(self.ytdl_ie_key),
                 False, {}, True)
-        except ytdl_module.utils.YoutubeDLError:
-            raise exception.AbortExtraction("Failed to extract video data")
+        #  except ytdl_module.utils.YoutubeDLError:
+        #     raise exception.AbortExtraction("Failed to extract video data")
+        except Exception as exc:
+            raise exception.AbortExtraction(
+                f"Failed to extract video data "
+                f"({exc.__class__.__name__}: {exc})")
 
         if not info_dict:
             return
@@ -114,7 +118,7 @@ class YoutubeDLExtractor(Extractor):
                              info_dict.get("webpage_url") or
                              self.ytdl_url)
 
-            yield Message.Directory, info_dict
+            yield Message.Directory, "", info_dict
             yield Message.Url, url, info_dict
 
     def _process_entries(self, ytdl_module, ytdl_instance, entries):

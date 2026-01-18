@@ -13,6 +13,7 @@ from .. import text, util
 from ..cache import memcache
 
 BASE_PATTERN = r"(?:https?://)?(?:www\.)?danke\.moe"
+MANGA_PATTERN = BASE_PATTERN + r"/read(?:er)?/(?:manga|series)/([\w-]+)"
 
 
 class DankefuerslesenBase():
@@ -28,13 +29,13 @@ class DankefuerslesenBase():
 
 class DankefuerslesenChapterExtractor(DankefuerslesenBase, ChapterExtractor):
     """Extractor for Danke fürs Lesen manga chapters"""
-    pattern = BASE_PATTERN + r"/read/manga/([\w-]+)/([\w-]+)"
+    pattern = MANGA_PATTERN + r"/([\w-]+)"
     example = "https://danke.moe/read/manga/TITLE/123/1/"
 
     def _init(self):
         self.zip = self.config("zip", False)
         if self.zip:
-            self.filename_fmt = f"{self.directory_fmt[-1]}.{{extension}}"
+            self.filename_fmt = self.directory_fmt[-1] + ".{extension}"
             self.directory_fmt = self.directory_fmt[:-1]
 
     def metadata(self, page):
@@ -68,7 +69,7 @@ class DankefuerslesenChapterExtractor(DankefuerslesenBase, ChapterExtractor):
             "chapter_minor": minor,
             "group"     : manga["groups"][group_id].split(" & "),
             "group_id"  : text.parse_int(group_id),
-            "date"      : text.parse_timestamp(data["release_date"][group_id]),
+            "date"      : self.parse_timestamp(data["release_date"][group_id]),
             "lang"      : util.NONE,
             "language"  : util.NONE,
         }
@@ -95,7 +96,7 @@ class DankefuerslesenMangaExtractor(DankefuerslesenBase, MangaExtractor):
     """Extractor for Danke fürs Lesen manga"""
     chapterclass = DankefuerslesenChapterExtractor
     reverse = False
-    pattern = BASE_PATTERN + r"/read/manga/([^/?#]+)"
+    pattern = MANGA_PATTERN
     example = "https://danke.moe/read/manga/TITLE/"
 
     def chapters(self, page):

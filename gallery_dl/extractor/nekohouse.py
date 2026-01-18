@@ -42,7 +42,7 @@ class NekohousePostExtractor(NekohouseExtractor):
         post["post_id"] = post_id
         post["count"] = len(files)
 
-        yield Message.Directory, post
+        yield Message.Directory, "", post
         for post["num"], file in enumerate(files, 1):
             url = file["url"]
             text.nameext_from_url(url, file)
@@ -59,8 +59,8 @@ class NekohousePostExtractor(NekohouseExtractor):
                 'class="scrape__user-name', '</').rpartition(">")[2].strip()),
             "title"   : text.unescape(extr(
                 'class="scrape__title', '</').rpartition(">")[2]),
-            "date"   : text.parse_datetime(extr(
-                'datetime="', '"')[:19], "%Y-%m-%d %H:%M:%S"),
+            "date"   : self.parse_datetime_iso(extr(
+                'datetime="', '"')[:19]),
             "content": text.unescape(extr(
                 'class="scrape__content">', "</div>").strip()),
         }

@@ -25,23 +25,29 @@ CATEGORY_MAP = {
     "35photo"        : "35PHOTO",
     "adultempire"    : "Adult Empire",
     "agnph"          : "AGNPH",
+    "ahottie"        : "AHottie",
     "aibooru"        : "AIBooru",
     "allgirlbooru"   : "All girl",
     "ao3"            : "Archive of Our Own",
     "archivedmoe"    : "Archived.Moe",
     "archiveofsins"  : "Archive of Sins",
+    "arena"          : "Are.na",
     "artstation"     : "ArtStation",
     "aryion"         : "Eka's Portal",
     "atfbooru"       : "ATFBooru",
+    "atfforum"       : "All The Fallen",
     "azurlanewiki"   : "Azur Lane Wiki",
     "b4k"            : "arch.b4k.dev",
     "baraag"         : "baraag",
     "batoto"         : "BATO.TO",
     "bbc"            : "BBC",
     "booth"          : "BOOTH",
+    "cfake"          : "Celebrity Fakes",
     "cien"           : "Ci-en",
     "cohost"         : "cohost!",
+    "comedywildlifephoto": "Comedy Wildlife Photography Awards",
     "comicvine"      : "Comic Vine",
+    "cyberfile"      : "CyberFile",
     "dankefuerslesen": "Danke fürs Lesen",
     "deviantart"     : "DeviantArt",
     "drawfriends"    : "Draw Friends",
@@ -50,6 +56,7 @@ CATEGORY_MAP = {
     "e926"           : "e926",
     "e6ai"           : "e6AI",
     "erome"          : "EroMe",
+    "eporner"        : "EPORNER",
     "everia"         : "EVERIA.CLUB",
     "e-hentai"       : "E-Hentai",
     "exhentai"       : "ExHentai",
@@ -57,11 +64,14 @@ CATEGORY_MAP = {
     "fanbox"         : "pixivFANBOX",
     "fappic"         : "Fappic.com",
     "fashionnova"    : "Fashion Nova",
+    "fikfap"         : "FikFap",
+    "fitnakedgirls"  : "FitNakedGirls",
     "furaffinity"    : "Fur Affinity",
     "furry34"        : "Furry 34 com",
     "girlswithmuscle": "Girls with Muscle",
     "hatenablog"     : "HatenaBlog",
     "hbrowse"        : "HBrowse",
+    "hdoujin"        : "HDoujin Galleries",
     "hentai2read"    : "Hentai2Read",
     "hentaicosplay"  : "Hentai Cosplay",
     "hentaienvy"     : "HentaiEnvy",
@@ -89,6 +99,9 @@ CATEGORY_MAP = {
     "imagechest"     : "ImageChest",
     "imgdrive"       : "ImgDrive.net",
     "imgkiwi"        : "IMG.Kiwi",
+    "imglike"        : "Nude Celeb",
+    "imgpile"        : "imgpile",
+    "imgpv"          : "IMGPV",
     "imgtaxi"        : "ImgTaxi.com",
     "imgth"          : "imgth",
     "imgur"          : "imgur",
@@ -99,6 +112,10 @@ CATEGORY_MAP = {
     "itchio"         : "itch.io",
     "jpgfish"        : "JPG Fish",
     "kabeuchi"       : "かべうち",
+    "mangafire"      : "MangaFire",
+    "mangareader"    : "MangaReader",
+    "mangataro"      : "MangaTaro",
+    "s3ndpics"       : "S3ND",
     "schalenetwork"  : "Schale Network",
     "leakgallery"    : "Leak Gallery",
     "livedoor"       : "livedoor Blog",
@@ -129,6 +146,8 @@ CATEGORY_MAP = {
     "nozrip"         : "GaryC Booru",
     "nsfwalbum"      : "NSFWalbum.com",
     "nudostar"       : "NudoStar.TV",
+    "nudostarforum"  : "NudoStar Forums",
+    "okporn"         : "OK.PORN",
     "paheal"         : "Rule 34",
     "photovogue"     : "PhotoVogue",
     "picstate"       : "PicState",
@@ -140,9 +159,9 @@ CATEGORY_MAP = {
     "pornimage"      : "Porn Image",
     "pornpics"       : "PornPics.com",
     "pornreactor"    : "PornReactor",
+    "pornstarstube"  : "PORNSTARS.TUBE",
     "postimg"        : "Postimages",
     "readcomiconline": "Read Comic Online",
-    "redbust"        : "RedBust",
     "rbt"            : "RebeccaBlackTech",
     "redgifs"        : "RedGIFs",
     "rozenarcana"    : "Rozen Arcana",
@@ -158,6 +177,7 @@ CATEGORY_MAP = {
     "sensescans"     : "Sense-Scans",
     "sexcom"         : "Sex.com",
     "silverpic"      : "SilverPic.com",
+    "simpcity"       : "SimpCity Forums",
     "simplyhentai"   : "Simply Hentai",
     "sizebooru"      : "Size Booru",
     "slickpic"       : "SlickPic",
@@ -172,10 +192,14 @@ CATEGORY_MAP = {
     "thatpervert"    : "ThatPervert",
     "thebarchive"    : "The /b/ Archive",
     "thecollection"  : "The /co/llection",
+    "thecollectionS" : "The /co/llection",
+    "thefap"         : "TheFap",
+    "thehentaiworld" : "The Hentai World",
     "tiktok"         : "TikTok",
     "tmohentai"      : "TMOHentai",
     "tumblrgallery"  : "TumblrGallery",
     "turboimagehost" : "TurboImageHost.com",
+    "turbovid"       : "turbovid.cr",
     "vanillarock"    : "もえぴりあ",
     "vidyart2"       : "/v/idyart2",
     "vidyapics"      : "Vidya Booru",
@@ -187,6 +211,7 @@ CATEGORY_MAP = {
     "webmshare"      : "webmshare",
     "webtoons"       : "WEBTOON",
     "weebcentral"    : "Weeb Central",
+    "weebdex"        : "WeebDex",
     "wikiart"        : "WikiArt.org",
     "wikigg"         : "wiki.gg",
     "wikimediacommons": "Wikimedia Commons",
@@ -195,6 +220,7 @@ CATEGORY_MAP = {
     "xvideos"        : "XVideos",
     "yandere"        : "yande.re",
     "yiffverse"      : "Yiff verse",
+    "yourlesbians"   : "YourLesbians",
 }
 
 SUBCATEGORY_MAP = {
@@ -211,6 +237,7 @@ SUBCATEGORY_MAP = {
     "media"  : "Media Files",
     "popular": "Popular Images",
     "recent" : "Recent Images",
+    "saved"  : "Saved Posts",
     "search" : "Search Results",
     "status" : "Images from Statuses",
     "tag"    : "Tag Searches",
@@ -222,11 +249,6 @@ SUBCATEGORY_MAP = {
     "related-pin"    : "related Pins",
     "related-board"  : "",
 
-    "ao3": {
-        "user-works"   : "",
-        "user-series"  : "",
-        "user-bookmark": "Bookmarks",
-    },
     "arcalive": {
         "user": "User Posts",
     },
@@ -234,8 +256,10 @@ SUBCATEGORY_MAP = {
         "artwork": "Artwork Listings",
         "collections": "",
     },
+    "audiochan": {
+        "audio": "Audios",
+    },
     "bilibili": {
-        "user-articles": "User Articles",
         "user-articles-favorite": "User Article Favorites",
     },
     "bluesky": {
@@ -244,6 +268,12 @@ SUBCATEGORY_MAP = {
     "boosty": {
         "feed": "Subscriptions Feed",
     },
+    "booth": {
+        "category": "Item Categories",
+    },
+    "cfake": {
+        "created": "Created",
+    },
     "civitai": {
         "models": "Model Listings",
         "images": "Image Listings",
@@ -251,11 +281,8 @@ SUBCATEGORY_MAP = {
         "posts" : "Post Listings",
         "search-models": "Model Searches",
         "search-images": "Image Searches",
-        "user-models": "User Models",
         "user-images": ("User Images", "Image Reactions"),
-        "user-posts" : "User Posts",
         "user-videos": ("User Videos", "Video Reactions"),
-        "user-collections" : "User Collections",
         "generated": "Generated Files",
     },
     "coomer": {
@@ -263,15 +290,17 @@ SUBCATEGORY_MAP = {
         "discord-server": "",
         "posts"         : "",
     },
+    "cyberfile": {
+        "shared": "Shares",
+    },
     "Danbooru": {
-        "artist-search": "Artist Searches",
         "favgroup": "Favorite Groups",
+        "random"  : "Random Posts",
     },
     "desktopography": {
         "site": "",
     },
     "deviantart": {
-        "gallery-search": "Gallery Searches",
         "stash" : "Sta.sh",
         "status": "Status Updates",
         "watch-posts": "",
@@ -285,6 +314,9 @@ SUBCATEGORY_MAP = {
     "fanbox": {
         "supporting": "Supported User Feed",
         "redirect"  : "Pixiv Redirects",
+    },
+    "fansly": {
+        "lists": "Account Lists",
     },
     "fapello": {
         "path": ["Videos", "Trending Posts", "Popular Videos", "Top Models"],
@@ -308,21 +340,19 @@ SUBCATEGORY_MAP = {
     },
     "instagram": {
         "posts": "",
-        "saved": "Saved Posts",
         "tagged": "Tagged Posts",
+        "stories-tray": "Stories Home Tray",
     },
     "itaku": {
         "posts": "",
-    },
-    "iwara": {
-        "user-images": "User Images",
-        "user-videos": "User Videos",
-        "user-playlists": "User Playlists",
     },
     "kemono": {
         "discord"       : "Discord Servers",
         "discord-server": "",
         "posts"         : "",
+    },
+    "koofr": {
+        "shared": "Shared Links",
     },
     "leakgallery": {
         "trending" : "Trending Medias",
@@ -331,16 +361,12 @@ SUBCATEGORY_MAP = {
     "lensdump": {
         "albums": "",
     },
-    "lofter": {
-        "blog-posts": "Blog Posts",
-    },
     "mangadex": {
         "feed": "Updates Feed",
         "following" : "Library",
         "list": "MDLists",
     },
     "misskey": {
-        "note" : "Notes",
         "notes": "User Notes",
     },
     "nijie": {
@@ -358,9 +384,6 @@ SUBCATEGORY_MAP = {
     },
     "pixiv": {
         "me"  : "pixiv.me Links",
-        "novel-bookmark": "Novel Bookmarks",
-        "novel-series": "Novel Series",
-        "novel-user": "",
         "pixivision": "pixivision",
         "sketch": "Sketch",
         "unlisted": "Unlisted Works",
@@ -377,9 +400,6 @@ SUBCATEGORY_MAP = {
         "post"           : "Individual Posts",
         "shorturl"       : "",
     },
-    "redbust": {
-        "gallery": ("Galleries", "Categories"),
-    },
     "redgifs": {
         "collections": "",
     },
@@ -391,6 +411,7 @@ SUBCATEGORY_MAP = {
     },
     "sexcom": {
         "pins": "User Pins",
+        "feed": "Feed",
     },
     "sizebooru": {
         "user": "User Uploads",
@@ -407,7 +428,9 @@ SUBCATEGORY_MAP = {
         "asset": "Individual Assets",
     },
     "tiktok": {
+        "posts": "User Posts",
         "vmpost": "VM Posts",
+        "following": "Followed Users (Stories Only)",
     },
     "tumblr": {
         "day": "Days",
@@ -421,6 +444,7 @@ SUBCATEGORY_MAP = {
     },
     "vk": {
         "tagged": "Tagged Photos",
+        "wall-post": "individual Wall Posts",
     },
     "vsco": {
         "spaces": "",
@@ -446,6 +470,11 @@ SUBCATEGORY_MAP = {
     "wikimedia": {
         "article": ["Articles", "Categories", "Files"],
     },
+    "xenforo": {
+        "media-user": "User Media",
+        "media-item": "Media Files",
+        "media-category": "Media Categories",
+    },
 }
 
 BASE_MAP = {
@@ -465,6 +494,7 @@ BASE_MAP = {
     "szurubooru"  : "szurubooru Instances",
     "urlshortener": "URL Shorteners",
     "vichan"      : "vichan Imageboards",
+    "xenforo"     : "XenForo Forums",
 }
 
 URL_MAP = {
@@ -519,25 +549,28 @@ AUTH_MAP = {
     "mastodon.social": _OAUTH,
     "newgrounds"     : "Supported",
     "nijie"          : "Required",
+    "nudostarforum"  : "Supported",
     "patreon"        : _COOKIES,
     "pawoo"          : _OAUTH,
     "pillowfort"     : "Supported",
     "pinterest"      : _COOKIES,
     "pixiv"          : _OAUTH,
     "pixiv-novel"    : _OAUTH,
+    "poipiku"        : _COOKIES,
     "ponybooru"      : "API Key",
     "reddit"         : _OAUTH,
     "rule34xyz"      : "Supported",
     "sankaku"        : "Supported",
     "scrolller"      : "Supported",
     "seiga"          : "Supported",
+    "simpcity"       : "Supported",
     "smugmug"        : _OAUTH,
     "subscribestar"  : "Supported",
     "tapas"          : "Supported",
     "tiktok"         : _COOKIES,
     "tsumino"        : "Supported",
     "tumblr"         : _OAUTH,
-    "twitter"        : "Supported",
+    "twitter"        : _COOKIES,
     "vipergirls"     : "Supported",
     "wallhaven"      : _APIKEY_WH,
     "weasyl"         : _APIKEY_WY,
@@ -597,11 +630,17 @@ def subcategory_text(bc, c, sc):
     if sc in SUBCATEGORY_MAP:
         return SUBCATEGORY_MAP[sc]
 
-    sc = sc.capitalize()
+    if "-" in sc:
+        sc = " ".join(s.capitalize() for s in sc.split("-"))
+    else:
+        sc = sc.capitalize()
+
     if sc.endswith("y"):
-        sc = sc[:-1] + "ies"
-    elif not sc.endswith("s"):
-        sc += "s"
+        sc = f"{sc[:-1]}ies"
+    elif sc.endswith("h"):
+        sc = f"{sc}es"
+    elif not sc.endswith("s") and not sc.endswith("edia"):
+        sc = f"{sc}s"
     return sc
 
 
@@ -669,11 +708,17 @@ def build_extractor_list():
     default["wikifeetx"] = default["wikifeet"]
     domains["wikifeetx"] = "https://www.wikifeetx.com/"
 
+    # turbovid
+    default["turbovid"] = default["saint"]
+    domains["turbovid"] = "https://turbovid.cr/"
+    domains["saint"] = "https://saint2.su/"
+
     # imgdrive / imgtaxi / imgwallet
     base = categories["imagehost"]
     base["imgtaxi"] = base["imgdrive"]
     base["imgwallet"] = base["imgdrive"]
     categories["imagehost"] = {k: base[k] for k in sorted(base)}
+    domains["postimg"] = "https://postimages.org/"
     domains["imgtaxi"] = "https://imgtaxi.com/"
     domains["imgwallet"] = "https://imgwallet.com/"
 

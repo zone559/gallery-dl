@@ -38,8 +38,7 @@ class InstagramExtractor(Extractor):
     def _init(self):
         self.www_claim = "0"
         self.csrf_token = util.generate_token()
-        self._find_tags = util.re(r"#\w+").findall
-        self._warn_video_ua = True
+        self._find_tags = text.re(r"#\w+").findall
         self._logged_in = True
         self._cursor = None
         self._user = None
@@ -52,13 +51,21 @@ class InstagramExtractor(Extractor):
         else:
             self.api = InstagramRestAPI(self)
 
+        self._warn_video = True if self.config("warn-videos", True) else False
+        self._warn_image = (
+            9 if not (wi := self.config("warn-images", True)) else
+            1 if wi in ("all", "both") else
+            0)
+
     def items(self):
         self.login()
 
         data = self.metadata()
         if videos := self.config("videos", True):
-            videos_dash = (videos != "merged")
+            self.videos_dash = videos_dash = (videos != "merged")
             videos_headers = {"User-Agent": "Mozilla/5.0"}
+        else:
+            self.videos_dash = False
         previews = self.config("previews", False)
         max_posts = self.config("max-posts")
 
@@ -81,21 +88,19 @@ class InstagramExtractor(Extractor):
             files = post.pop("_files")
 
             post["count"] = len(files)
-            yield Message.Directory, post
+            yield Message.Directory, "", post
 
-            if "date" in post:
-                del post["date"]
             if reverse:
                 files.reverse()
 
             for file in files:
-                file.update(post)
+                file = {**post, **file}
 
                 if url := file.get("video_url"):
                     if videos:
                         file["_http_headers"] = videos_headers
                         text.nameext_from_url(url, file)
-                        if videos_dash:
+                        if videos_dash and "_ytdl_manifest_data" in file:
                             file["_fallback"] = (url,)
                             file["_ytdl_manifest"] = "dash"
                             url = f"ytdl:{post['post_url']}{file['num']}.mp4"
@@ -132,6 +137,8 @@ class InstagramExtractor(Extractor):
                 page = "login"
             elif "/challenge/" in url:
                 page = "challenge"
+            elif 24 < len(url) < 28 and url[-1] == "/":
+                page = "home"
             else:
                 page = None
 
@@ -168,10 +175,11 @@ class InstagramExtractor(Extractor):
                 post_url = f"{self.root}/stories/highlights/{reel_id}/"
             data = {
                 "user"   : post.get("user"),
-                "expires": text.parse_timestamp(expires),
+                "expires": self.parse_timestamp(expires),
                 "post_id": reel_id,
                 "post_shortcode": shortcode_from_id(reel_id),
                 "post_url": post_url,
+                "type": "story" if expires else "highlight",
             }
             if "title" in post:
                 data["highlight_title"] = post["title"]
@@ -182,7 +190,6 @@ class InstagramExtractor(Extractor):
             data = {
                 "post_id" : post["pk"],
                 "post_shortcode": post["code"],
-                "post_url": f"{self.root}/p/{post['code']}/",
                 "likes": post.get("like_count", 0),
                 "liked": post.get("has_liked", False),
                 "pinned": self._extract_pinned(post),
@@ -219,7 +226,7 @@ class InstagramExtractor(Extractor):
         data["owner_id"] = owner["pk"]
         data["username"] = owner.get("username")
         data["fullname"] = owner.get("full_name")
-        data["post_date"] = data["date"] = text.parse_timestamp(
+        data["post_date"] = data["date"] = self.parse_timestamp(
             post.get("taken_at") or post.get("created_at") or post.get("seen"))
         data["_files"] = files = []
         for num, item in enumerate(items, 1):
@@ -231,40 +238,49 @@ class InstagramExtractor(Extractor):
                                  data["post_shortcode"])
                 continue
 
+            width_orig = item.get("original_width", 0)
+            height_orig = item.get("original_height", 0)
+
             if video_versions := item.get("video_versions"):
                 video = max(
                     video_versions,
                     key=lambda x: (x["width"], x["height"], x["type"]),
                 )
-                manifest = item.get("video_dash_manifest")
-                media = video
 
-                if self._warn_video_ua:
-                    self._warn_video_ua = False
+                media = video
+                if (manifest := item.get("video_dash_manifest")) and \
+                        self.videos_dash:
+                    width = width_orig
+                    height = height_orig
+                else:
+                    width = video["width"]
+                    height = video["height"]
+
+                if self._warn_video:
+                    self._warn_video = False
                     pattern = text.re(
-                        r"AppleWebKit/537\.36 \(KHTML, like Gecko\) "
-                        r"Chrome/\d+\.\d+\.\d+\.\d+ Safari/537\.36$")
+                        r"Chrome/\d{3,}\.\d+\.\d+\.\d+(?!\d* Mobile)")
                     if not pattern.search(self.session.headers["User-Agent"]):
                         self.log.warning("Potentially lowered video quality "
                                          "due to non-Chrome User-Agent")
             else:
                 video = manifest = None
                 media = image
+                width = image["width"]
+                height = image["height"]
 
-                if image["width"] < item.get("original_width", 0) or \
-                        image["height"] < item.get("original_height", 0):
+                if self._warn_image < ((width * 1.1 < width_orig) +
+                                       (height * 1.1 < height_orig)):
                     self.log.warning(
                         "%s: Available image resolutions lower than the "
                         "original (%sx%s < %sx%s). "
                         "Consider refreshing your cookies.",
                         data["post_shortcode"],
-                        image["width"], image["height"],
-                        item.get("original_width", 0),
-                        item.get("original_height", 0))
+                        width, height, width_orig, height_orig)
 
             media = {
                 "num"        : num,
-                "date"       : text.parse_timestamp(item.get("taken_at") or
+                "date"       : self.parse_timestamp(item.get("taken_at") or
                                                     media.get("taken_at") or
                                                     post.get("taken_at")),
                 "media_id"   : item["pk"],
@@ -272,21 +288,35 @@ class InstagramExtractor(Extractor):
                                 shortcode_from_id(item["pk"])),
                 "display_url": image["url"],
                 "video_url"  : video["url"] if video else None,
-                "width"      : media["width"],
-                "height"     : media["height"],
+                "width"          : width,
+                "width_original" : width_orig,
+                "height"         : height,
+                "height_original": height_orig,
             }
 
             if manifest is not None:
                 media["_ytdl_manifest_data"] = manifest
             if "owner" in item:
-                media["owner2"] = item["owner"]
+                media["owner"] = item["owner"]
             if "reshared_story_media_author" in item:
                 media["author"] = item["reshared_story_media_author"]
             if "expiring_at" in item:
-                media["expires"] = text.parse_timestamp(post["expiring_at"])
+                media["expires"] = self.parse_timestamp(item["expiring_at"])
+            if "subscription_media_visibility" in item:
+                media["subscription"] = item["subscription_media_visibility"]
 
             self._extract_tagged_users(item, media)
             files.append(media)
+
+        if "subscription_media_visibility" in post:
+            data["subscription"] = post["subscription_media_visibility"]
+        if "type" not in data:
+            if len(files) == 1 and files[0]["video_url"]:
+                data["type"] = "reel"
+                data["post_url"] = f"{self.root}/reel/{post['code']}/"
+            else:
+                data["type"] = "post"
+                data["post_url"] = f"{self.root}/p/{post['code']}/"
 
         return data
 
@@ -316,7 +346,7 @@ class InstagramExtractor(Extractor):
             "post_id"    : post["id"],
             "post_shortcode": post["shortcode"],
             "post_url"   : f"{self.root}/p/{post['shortcode']}/",
-            "post_date"  : text.parse_timestamp(post["taken_at_timestamp"]),
+            "post_date"  : self.parse_timestamp(post["taken_at_timestamp"]),
             "description": text.parse_unicode_escapes("\n".join(
                 edge["node"]["text"]
                 for edge in post["edge_media_to_caption"]["edges"]
@@ -423,7 +453,8 @@ class InstagramExtractor(Extractor):
         return cursor
 
     def _update_cursor(self, cursor):
-        self.log.debug("Cursor: %s", cursor)
+        if cursor:
+            self.log.debug("Cursor: %s", cursor)
         self._cursor = cursor
         return cursor
 
@@ -442,6 +473,34 @@ class InstagramExtractor(Extractor):
                 user[key] = user.pop(old)["count"]
             except Exception:
                 user[key] = 0
+
+
+class InstagramPostExtractor(InstagramExtractor):
+    """Extractor for an Instagram post"""
+    subcategory = "post"
+    pattern = (r"(?:https?://)?(?:www\.)?instagram\.com"
+               r"/(?:share()(?:/(?:p|tv|reels?()))?"
+               r"|(?:[^/?#]+/)?(?:p|tv|reels?()))"
+               r"/([^/?#]+)")
+    example = "https://www.instagram.com/p/abcdefg/"
+
+    def __init__(self, match):
+        if match[2] is not None or match[3] is not None:
+            self.subcategory = "reel"
+        InstagramExtractor.__init__(self, match)
+
+    def posts(self):
+        share, _, _, shortcode = self.groups
+        if share is not None:
+            url = text.ensure_http_scheme(self.url)
+            headers = {
+                "Sec-Fetch-Dest": "empty",
+                "Sec-Fetch-Mode": "navigate",
+                "Sec-Fetch-Site": "same-origin",
+            }
+            location = self.request_location(url, headers=headers)
+            shortcode = location.split("/")[-2]
+        return self.api.media(shortcode)
 
 
 class InstagramUserExtractor(Dispatch, InstagramExtractor):
@@ -506,10 +565,12 @@ class InstagramTaggedExtractor(InstagramExtractor):
     def metadata(self):
         if self.item.startswith("id:"):
             self.user_id = self.item[3:]
-            return {"tagged_owner_id": self.user_id}
-
-        self.user_id = self.api.user_id(self.item)
-        user = self.api.user_by_name(self.item)
+            if not self.config("metadata"):
+                return {"tagged_owner_id": self.user_id}
+            user = self.api.user_by_id(self.user_id)
+        else:
+            self.user_id = self.api.user_id(self.item)
+            user = self.api.user_by_name(self.item)
 
         return {
             "tagged_owner_id" : user["id"],
@@ -566,6 +627,20 @@ class InstagramCollectionExtractor(InstagramExtractor):
 
     def posts(self):
         return self.api.user_collection(self.collection_id)
+
+
+class InstagramStoriesTrayExtractor(InstagramExtractor):
+    """Extractor for your Instagram account's stories tray"""
+    subcategory = "stories-tray"
+    pattern = BASE_PATTERN + r"/stories/me/?$()"
+    example = "https://www.instagram.com/stories/me/"
+
+    def items(self):
+        base = self.root + "/stories/id:"
+        for story in self.api.reels_tray():
+            story["date"] = self.parse_timestamp(story["latest_reel_media"])
+            story["_extractor"] = InstagramStoriesExtractor
+            yield Message.Queue, f"{base}{story['id']}/", story
 
 
 class InstagramStoriesExtractor(InstagramExtractor):
@@ -684,7 +759,7 @@ class InstagramInfoExtractor(InstagramExtractor):
         else:
             user = self.api.user_by_name(screen_name)
 
-        return iter(((Message.Directory, user),))
+        return iter(((Message.Directory, "", user),))
 
 
 class InstagramAvatarExtractor(InstagramExtractor):
@@ -723,27 +798,6 @@ class InstagramAvatarExtractor(InstagramExtractor):
             "like_count": 0,
             "image_versions2": {"candidates": (avatar,)},
         },)
-
-
-class InstagramPostExtractor(InstagramExtractor):
-    """Extractor for an Instagram post"""
-    subcategory = "post"
-    pattern = (r"(?:https?://)?(?:www\.)?instagram\.com"
-               r"/(?:share/()|[^/?#]+/)?(?:p|tv|reel)/([^/?#]+)")
-    example = "https://www.instagram.com/p/abcdefg/"
-
-    def posts(self):
-        share, shortcode = self.groups
-        if share is not None:
-            url = text.ensure_http_scheme(self.url)
-            headers = {
-                "Sec-Fetch-Dest": "empty",
-                "Sec-Fetch-Mode": "navigate",
-                "Sec-Fetch-Site": "same-origin",
-            }
-            location = self.request_location(url, headers=headers)
-            shortcode = location.split("/")[-2]
-        return self.api.media(shortcode)
 
 
 class InstagramRestAPI():
@@ -793,7 +847,11 @@ class InstagramRestAPI():
         try:
             return self._call(endpoint, params=params)["reels_media"]
         except KeyError:
-            raise exception.AuthorizationError("Login required")
+            raise exception.AuthRequired("authenticated cookies")
+
+    def reels_tray(self):
+        endpoint = "/v1/feed/reels_tray/"
+        return self._call(endpoint)["tray"]
 
     def tags_media(self, tag):
         for section in self.tags_sections(tag):
@@ -815,8 +873,11 @@ class InstagramRestAPI():
     def user_by_name(self, screen_name):
         endpoint = "/v1/users/web_profile_info/"
         params = {"username": screen_name}
-        return self._call(
-            endpoint, params=params, notfound="user")["data"]["user"]
+        try:
+            return self._call(
+                endpoint, params=params, notfound="user")["data"]["user"]
+        except KeyError:
+            raise exception.NotFoundError("user")
 
     @memcache(keyarg=1)
     def user_by_id(self, user_id):

@@ -23,9 +23,10 @@ class ZerochanExtractor(BooruExtractor):
     filename_fmt = "{id}.{extension}"
     archive_fmt = "{id}"
     page_start = 1
-    per_page = 250
+    per_page = 200
     cookies_domain = ".zerochan.net"
     cookies_names = ("z_id", "z_hash")
+    useragent = util.USERAGENT_GALLERYDL
     request_interval = (0.5, 1.5)
 
     def login(self):
@@ -75,7 +76,7 @@ class ZerochanExtractor(BooruExtractor):
         data = {
             "id"      : text.parse_int(entry_id),
             "file_url": jsonld["contentUrl"],
-            "date"    : text.parse_datetime(jsonld["datePublished"]),
+            "date"    : self.parse_datetime_iso(jsonld["datePublished"]),
             "width"   : text.parse_int(jsonld["width"][:-3]),
             "height"  : text.parse_int(jsonld["height"][:-3]),
             "size"    : text.parse_bytes(jsonld["contentSize"][:-1]),
@@ -127,7 +128,7 @@ class ZerochanExtractor(BooruExtractor):
         return data
 
     def _parse_json(self, txt):
-        txt = util.re(r"[\x00-\x1f\x7f]").sub("", txt)
+        txt = text.re(r"[\x00-\x1f\x7f]").sub("", txt)
         main, _, tags = txt.partition('tags": [')
 
         item = {}
@@ -172,7 +173,6 @@ class ZerochanTagExtractor(ZerochanExtractor):
             self.per_page = 24
         else:
             self.posts = self.posts_api
-            self.session.headers["User-Agent"] = util.USERAGENT
 
         if exts := self.config("extensions"):
             if isinstance(exts, str):
@@ -187,12 +187,19 @@ class ZerochanTagExtractor(ZerochanExtractor):
 
     def posts_html(self):
         url = self.root + "/" + self.search_tag
-        params = text.parse_query(self.query)
-        params["p"] = text.parse_int(params.get("p"), self.page_start)
         metadata = self.config("metadata")
 
+        params = text.parse_query(self.query, empty=True)
+        params["p"] = text.parse_int(params.get("p"), self.page_start)
+
         while True:
-            page = self.request(url, params=params, expected=(500,)).text
+            try:
+                page = self.request(
+                    url, params=params, expected=(500,)).text
+            except exception.HttpError as exc:
+                if exc.status == 404:
+                    return
+                raise
             thumbs = text.extr(page, '<ul id="thumbs', '</ul>')
             extr = text.extract_from(thumbs)
 
@@ -224,14 +231,20 @@ class ZerochanTagExtractor(ZerochanExtractor):
     def posts_api(self):
         url = self.root + "/" + self.search_tag
         metadata = self.config("metadata")
-        params = {
-            "json": "1",
-            "l"   : self.per_page,
-            "p"   : self.page_start,
-        }
+
+        params = text.parse_query(self.query, empty=True)
+        params["p"] = text.parse_int(params.get("p"), self.page_start)
+        params.setdefault("l", self.per_page)
+        params["json"] = "1"
 
         while True:
-            response = self.request(url, params=params, allow_redirects=False)
+            try:
+                response = self.request(
+                    url, params=params, allow_redirects=False)
+            except exception.HttpError as exc:
+                if exc.status == 404:
+                    return
+                raise
 
             if response.status_code >= 300:
                 url = text.urljoin(self.root, response.headers["location"])
@@ -275,12 +288,18 @@ class ZerochanImageExtractor(ZerochanExtractor):
     pattern = BASE_PATTERN + r"/(\d+)"
     example = "https://www.zerochan.net/12345"
 
-    def __init__(self, match):
-        ZerochanExtractor.__init__(self, match)
-        self.image_id = match[1]
-
     def posts(self):
-        post = self._parse_entry_html(self.image_id)
+        image_id = self.groups[0]
+
+        try:
+            post = self._parse_entry_html(image_id)
+        except exception.HttpError as exc:
+            if exc.status in (404, 410):
+                if msg := text.extr(exc.response.text, "<h2>", "<"):
+                    self.log.warning(f"'{msg}'")
+                return ()
+            raise
+
         if self.config("metadata"):
-            post.update(self._parse_entry_api(self.image_id))
+            post.update(self._parse_entry_api(image_id))
         return (post,)

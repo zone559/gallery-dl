@@ -47,13 +47,13 @@ class VanillarockPostExtractor(VanillarockExtractor):
             "count": len(imgs),
             "title": text.unescape(name),
             "path" : self.path.strip("/"),
-            "date" : text.parse_datetime(extr(
-                '<div class="date">', '</div>'), "%Y-%m-%d %H:%M"),
+            "date" : self.parse_datetime_iso(extr(
+                '<div class="date">', '</div>')),
             "tags" : text.split_html(extr(
                 '<div class="cat-tag">', '</div>'))[::2],
         }
 
-        yield Message.Directory, data
+        yield Message.Directory, "", data
         for data["num"], url in enumerate(imgs, 1):
             yield Message.Url, url, text.nameext_from_url(url, data)
 
